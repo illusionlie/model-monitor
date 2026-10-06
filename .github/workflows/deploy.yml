@@ -1,0 +1,174 @@
+# 部署 workflow(DECISIONS §7 / design.md §10)
+#
+# 所需 GitHub secrets:
+#   CF_API_TOKEN        必需  Cloudflare API Token(最小权限:Account·Workers Scripts·Edit
+#                              + Account·D1·Edit + Account·Account Settings·Read)
+#   CF_ACCOUNT_ID       可选  账号 ID(多账号时必填;单账号 wrangler 可自行推断)
+#   WORKER_NAME         可选  Worker 名,默认 model-monitor
+#   D1_NAME             可选  D1 库名,默认 ${WORKER_NAME}-db
+#   CF_D1_DATABASE_ID   可选  指定既有 D1 的 database_id(会校验存在;否则按 D1_NAME 查找/创建)
+#   CUSTOM_DOMAIN       可选  自定义域名,非空时追加 routes = ["https://<domain>/*"]
+#
+# 业务 secrets(TG token、Resend key、管理密码哈希等)只存 D1 settings,不经 CI(DECISIONS §5)。
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      cron_minutes:
+        description: '轮询间隔(分钟);留空/非法 → 兜底 */30'
+        required: false
+        default: ''
+        type: string
+      force_migrations:
+        description: '强制执行 D1 迁移(即使未检测到待应用迁移)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+# 部署是写操作:排队而不是互相取消,避免两次部署争抢同一 D1/Worker
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm # 缓存 ~/.npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # wrangler 认证走 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID 环境变量。
+      # CLOUDFLARE_ACCOUNT_ID 只在 secret 存在时设置:置空字符串反而可能干扰 wrangler 的账号推断。
+      - name: Configure Cloudflare credentials
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_API_TOKEN}" ]; then
+            echo "::error::缺少必需 secret CF_API_TOKEN。请在仓库 Settings → Secrets and variables → Actions 添加(创建入口:Cloudflare Dashboard → My Profile → API Tokens)。"
+            exit 1
+          fi
+          echo "CLOUDFLARE_API_TOKEN=${CF_API_TOKEN}" >> "$GITHUB_ENV"
+          if [ -n "${CF_ACCOUNT_ID}" ]; then
+            echo "CLOUDFLARE_ACCOUNT_ID=${CF_ACCOUNT_ID}" >> "$GITHUB_ENV"
+          fi
+
+      # D1 解析:指定了 CF_D1_DATABASE_ID → d1 info 校验存在(fail-fast);
+      # 否则按 D1_NAME 在 d1 list 里精确匹配;没有则创建,并复查 list 提取 database_id
+      # (不依赖 d1 create 的文本输出格式,不同 wrangler 版本输出不稳定)。
+      - name: Resolve or create D1 database
+        id: d1
+        env:
+          WORKER_NAME_SECRET: ${{ secrets.WORKER_NAME }}
+          D1_NAME_SECRET: ${{ secrets.D1_NAME }}
+          CF_D1_DATABASE_ID: ${{ secrets.CF_D1_DATABASE_ID }}
+        run: |
+          set -euo pipefail
+          WORKER_NAME="${WORKER_NAME_SECRET:-model-monitor}"
+          DB_NAME="${D1_NAME_SECRET:-${WORKER_NAME}-db}"
+          echo "worker_name=${WORKER_NAME}" >> "$GITHUB_OUTPUT"
+          echo "db_name=${DB_NAME}" >> "$GITHUB_OUTPUT"
+          echo "worker=${WORKER_NAME} db=${DB_NAME}"
+
+          resolve_id_by_name() {
+            npx wrangler d1 list --json \
+              | jq -r --arg n "$1" '[.[] | select(.name == $n) | (.uuid // .id // empty)][0] // empty'
+          }
+
+          if [ -n "${CF_D1_DATABASE_ID}" ]; then
+            echo "CF_D1_DATABASE_ID 已指定,校验该库存在 ..."
+            if ! npx wrangler d1 info "${CF_D1_DATABASE_ID}" >/dev/null 2>&1; then
+              echo "::error::CF_D1_DATABASE_ID=${CF_D1_DATABASE_ID} 对应的 D1 不存在,或 token 无权访问(D1·Edit)。"
+              exit 1
+            fi
+            DB_ID="${CF_D1_DATABASE_ID}"
+          else
+            DB_ID="$(resolve_id_by_name "${DB_NAME}")"
+            if [ -z "${DB_ID}" ]; then
+              echo "未找到名为 ${DB_NAME} 的 D1,自动创建 ..."
+              npx wrangler d1 create "${DB_NAME}"
+              DB_ID="$(resolve_id_by_name "${DB_NAME}")"
+              if [ -z "${DB_ID}" ]; then
+                echo "::error::D1 创建后仍无法从 d1 list 解析 database_id,请检查 token 权限(Account·D1·Edit)。"
+                exit 1
+              fi
+            fi
+          fi
+          echo "database_id=${DB_ID}"
+          echo "db_id=${DB_ID}" >> "$GITHUB_OUTPUT"
+
+      # 从 wrangler.toml.example 生成 wrangler.toml(不入库,见 .gitignore)。
+      # routes 必须是顶层键,插在 compatibility_date 之后([triggers] 等表头之前),不能追加到文件末尾。
+      - name: Generate wrangler.toml
+        env:
+          CRON_MINUTES: ${{ inputs.cron_minutes || '' }}
+          CUSTOM_DOMAIN: ${{ secrets.CUSTOM_DOMAIN }}
+          WORKER_NAME: ${{ steps.d1.outputs.worker_name }}
+          DB_NAME: ${{ steps.d1.outputs.db_name }}
+          DB_ID: ${{ steps.d1.outputs.db_id }}
+        run: |
+          set -euo pipefail
+          CRON_EXPR="$(node scripts/cron-expr.mjs "${CRON_MINUTES}")"
+          echo "CRON_EXPR=${CRON_EXPR}"
+          sed \
+            -e "s|__WORKER_NAME__|${WORKER_NAME}|g" \
+            -e "s|__D1_NAME__|${DB_NAME}|g" \
+            -e "s|__D1_DATABASE_ID__|${DB_ID}|g" \
+            -e "s|__CRON_EXPRESSION__|${CRON_EXPR}|g" \
+            wrangler.toml.example > wrangler.toml
+          if [ -n "${CUSTOM_DOMAIN}" ]; then
+            DOMAIN="${CUSTOM_DOMAIN%/}"
+            sed -i "/^compatibility_date =/a routes = [\"https://${DOMAIN}/*\"]" wrangler.toml
+            echo "已追加自定义域名路由:https://${DOMAIN}/*"
+          fi
+          echo '----- wrangler.toml -----'
+          cat wrangler.toml
+
+      # 迁移:检测 migrations/*.sql 中是否有文件出现在 `d1 migrations list` 的待应用输出里;
+      # 检测失败(list 本身报错)则 fail-fast,避免部署一个缺表的库。
+      - name: Apply D1 migrations
+        env:
+          DB_NAME: ${{ steps.d1.outputs.db_name }}
+          FORCE_MIGRATIONS: ${{ inputs.force_migrations }}
+        run: |
+          set -euo pipefail
+          if ! LIST="$(npx wrangler d1 migrations list "${DB_NAME}" --remote 2>&1)"; then
+            echo "${LIST}"
+            echo "::error::wrangler d1 migrations list 失败(见上方输出)。"
+            exit 1
+          fi
+          echo "${LIST}"
+          PENDING="false"
+          for f in migrations/*.sql; do
+            [ -e "$f" ] || continue
+            name="$(basename "$f")"
+            if echo "${LIST}" | grep -qF "${name}"; then
+              PENDING="true"
+              echo "待应用迁移:${name}"
+            fi
+          done
+          if [ "${FORCE_MIGRATIONS}" = "true" ] || [ "${PENDING}" = "true" ]; then
+            npx wrangler d1 migrations apply "${DB_NAME}" --remote
+          else
+            echo "无未应用迁移,跳过 migrations apply"
+          fi
+
+      - name: Deploy Worker
+        run: npx wrangler deploy
