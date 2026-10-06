@@ -1,0 +1,19 @@
+#:schema node_modules/wrangler/config-schema.json
+# 由 CI 从本模板生成 wrangler.toml(不入库),sed 替换以下占位符:
+#   __WORKER_NAME__ / __D1_NAME__ / __D1_DATABASE_ID__ / __CRON_EXPRESSION__
+# 业务 secrets(TG token、Resend key、管理密码哈希等)只存 D1 settings,不进本文件(DECISIONS §5)。
+name = "__WORKER_NAME__"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[triggers]
+crons = ["__CRON_EXPRESSION__"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "__D1_NAME__"
+database_id = "__D1_DATABASE_ID__"
+
+# 需在 Dashboard 开启 Email(Compute → Email Service)后部署才生效;本地 dev 可注释掉
+[[send_email]]
+name = "SEND_EMAIL"
