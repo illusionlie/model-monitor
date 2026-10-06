@@ -1,0 +1,2 @@
+{"file": "DECISIONS.md", "reason": "全部契约与语义的唯一权威来源(事件语义/去重/调度/存储/通知/部署);实现中任何歧义以此为准,§9 外部事实过期需重新核实"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "engine→db→notify 跨层数据流检查清单,写 runOnce/通知链路前过一遍"}

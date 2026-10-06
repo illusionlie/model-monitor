@@ -1,0 +1,2 @@
+{"file": "DECISIONS.md", "reason": "验收对照基准:逐节核对实现是否偏离(尤其 §1 事件语义、§4 写放大禁令、§5 通道矩阵、§6 路由契约、§10 不做清单)"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "检查重复模式(render/db 层最易复制粘贴)"}
