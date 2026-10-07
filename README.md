@@ -1,6 +1,6 @@
 # model-monitor · LLM 模型监视器
 
-自用的 Cloudflare Workers 服务:定时轮询 LLM 模型目录(OpenRouter、models.dev)与自有渠道端点(任意 OpenAI 兼容 `GET {base_url}/models`),diff 出「新增 / 下架」,经 Telegram 和邮件通知;带一个密码保护的小设置后台。**全程跑在 Cloudflare 免费档**。
+基于 Cloudflare Workers 的模型监测服务: 定时轮询 LLM 模型目录(OpenRouter、models.dev)与自有渠道端点(任意 OpenAI 兼容 `GET {base_url}/models`),diff 出「新增 / 下架」,经 Telegram 和邮件通知;带一个密码保护的小设置后台。**全程跑在 Cloudflare 免费档**。
 
 ## 架构
 
@@ -119,14 +119,6 @@ CI 流程:校验/创建 D1 → 按需 `d1 migrations apply --remote` → 从 `wr
 
 - **临时/单次**:Actions → Deploy → Run workflow,填 `cron_minutes`(该次部署生效);
 - **持久**:改 `wrangler.toml.example` 里的 `__CRON_EXPRESSION__`(或干脆依赖每次 dispatch 传入),push 后 CI 重新生成。
-
-## 验收清单
-
-- [ ] push 后 CI 全绿:D1 自动创建、迁移应用、Worker 部署成功(人工步骤只有填 GH secrets);
-- [ ] `/setup` 走通;配完 TG 后「发送测试通知」能收到;
-- [ ] 「立即运行」完成两个内置目录源首跑:静默 seed、事件表有记录、`/feed` 可读;
-- [ ] 制造一个模型消失后两轮探测内收到 delisted;制造连续 3 次失败触发告警,恢复有通知;
-- [ ] 观察一周无 1027(请求超限)/ CPU 超限报错。
 
 ## 本地开发
 

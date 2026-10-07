@@ -1,12 +1,11 @@
 # model-monitor · Agent 指南
 
-自用的 Cloudflare Workers 服务:定时轮询 LLM 模型目录与渠道端点,diff 出新增/下架,经 Telegram 与邮件通知,带密码保护的后台。**全程免费档**。
+基于 Cloudflare Workers 的模型监测服务:定时轮询 LLM 模型目录与渠道端点,diff 出新增/下架,经 Telegram 与邮件通知,带密码保护的后台。**全程免费档**。
 
-> 下方 `<!-- TRELLIS:START/END -->` 块由 Trellis 管理,`trellis update` 会整体替换——自定义内容只写在块外(即本文件顶部)。
 
 ## 第一优先级文档(按序读)
 
-1. **`.trellis/spec/product/`** — 产品契约的唯一权威(原 `DECISIONS.md` 已于 2026-10-07 迁入并删除):入口 `product/index.md`,含事件语义、数据源、调度、存储、通知、后台、部署、验收。实现与契约冲突时以契约文件为准;`non-goals.md` 是明确的"不做清单";`external-facts.md` 的外部事实带核实日期,怀疑过期先重核、别凭记忆。**新的设计与决策只写进 `.trellis/spec/`,不再建根级决策记录文件。**
+1. **`.trellis/spec/product/`** — 产品契约的唯一权威:入口 `product/index.md`,含事件语义、数据源、调度、存储、通知、后台、部署、验收。实现与契约冲突时以契约文件为准;`non-goals.md` 是明确的"不做清单";`external-facts.md` 的外部事实带核实日期,怀疑过期先重核、别凭记忆。**新的设计与决策只写进 `.trellis/spec/`,不再建根级决策记录文件。**
 2. **`.trellis/spec/backend/`** — 编码规范与 Key Gotchas。写任何代码前先读 `index.md`(含 workerd 生产环境特有的坑)。
 3. `.trellis/workflow.md` — 开发流程(Trellis 任务制、提交纪律)。
 
@@ -41,7 +40,7 @@ npx wrangler d1 migrations apply model-monitor-db --local
 node scripts/cron-expr.mjs 90    # cron 表达式生成;空参/非法 → */30
 ```
 
-部署只走 CI(push main 或 workflow_dispatch,可填 `cron_minutes`)。本机直连 `openrouter.ai` / `models.dev` 需代理——端到端验证请用部署后的环境或本地 mock 端点,别反复重试直连。
+部署只走 CI(push main 或 workflow_dispatch,可填 `cron_minutes`)
 
 ## 测试与提交约定
 
