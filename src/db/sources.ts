@@ -7,6 +7,7 @@ export interface SourceRow {
   name: string;
   base_url: string;
   api_key: string | null;
+  extra_headers: string | null; // 渠道自定义请求头 JSON 对象字符串,NULL/空 = 无
   enabled: number;
   seed_done: number;
   last_hash: string | null;
@@ -91,17 +92,55 @@ export async function updateSourceStatus(
 /** 后台新增渠道源(spec:product/data-sources.md);seed_done=0 → 下轮探测即静默 seed */
 export async function createChannelSource(
   db: D1Database,
-  input: { name: string; base_url: string; api_key?: string | null },
+  input: { name: string; base_url: string; api_key?: string | null; extra_headers?: string | null },
   nowIso: string,
 ): Promise<number> {
   const res = await db
     .prepare(
-      `INSERT INTO sources (kind, name, base_url, api_key, enabled, seed_done, created_at, updated_at)
-       VALUES ('channel', ?, ?, ?, 1, 0, ?, ?)`,
+      `INSERT INTO sources (kind, name, base_url, api_key, extra_headers, enabled, seed_done, created_at, updated_at)
+       VALUES ('channel', ?, ?, ?, ?, 1, 0, ?, ?)`,
     )
-    .bind(input.name, input.base_url, input.api_key ?? null, nowIso, nowIso)
+    .bind(input.name, input.base_url, input.api_key ?? null, input.extra_headers ?? null, nowIso, nowIso)
     .run();
   return res.meta?.last_row_id ?? 0;
+}
+
+export interface ChannelSourcePatch {
+  name?: string;
+  base_url?: string;
+  api_key?: string | null; // null = 清空
+  extra_headers?: string | null; // null = 清空
+}
+
+/** 渠道编辑(路由层已守卫 kind='channel'):只更新给出的字段,api_key/extra_headers 用 in 区分"清空"与"不修改";1 条语句,updated_at 必写。 */
+export async function updateChannelSource(
+  db: D1Database,
+  id: number,
+  patch: ChannelSourcePatch,
+  nowIso: string,
+): Promise<void> {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  if (patch.name !== undefined) {
+    sets.push('name = ?');
+    values.push(patch.name);
+  }
+  if (patch.base_url !== undefined) {
+    sets.push('base_url = ?');
+    values.push(patch.base_url);
+  }
+  if ('api_key' in patch) {
+    sets.push('api_key = ?');
+    values.push(patch.api_key ?? null);
+  }
+  if ('extra_headers' in patch) {
+    sets.push('extra_headers = ?');
+    values.push(patch.extra_headers ?? null);
+  }
+  if (!sets.length) return;
+  sets.push('updated_at = ?');
+  values.push(nowIso, id);
+  await db.prepare(`UPDATE sources SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
 }
 
 /** 删除渠道源;内置目录源(migration 预置)不允许删,保持 v1 语义稳定 */

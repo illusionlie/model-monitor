@@ -15,7 +15,7 @@ This project's quality bar is **contract fidelity**: the product contract in `.t
 - Reading business secrets from `env` / wrangler.toml — they are D1 `settings` rows (spec:product/notifications.md). `src/env.ts` may only declare `DB` and `SEND_EMAIL`.
 - Node-only APIs (`node:*` imports, Node globals) in `src/**` — that code runs in the Worker runtime. Node types are enabled in tsconfig for `test/` and `scripts/` only; keep it that way.
 - Per-run full upsert of the `models` table (quota rule — see database-guidelines).
-- String-interpolated SQL; unescaped interpolation of user/model data into HTML (use the escape helpers in `render.ts` / `ui.ts`; remote data in admin UI goes through `textContent`).
+- String-interpolated SQL; unescaped interpolation of user/model data into HTML (use the escape helpers in `render.ts` / `admin/ui/`; remote data in admin UI goes through `textContent`).
 - New features from the not-doing list in `product/non-goals.md` (price events, RSS, log cleanup, KV, Cloudflare Access, better-auth, admin cron editing).
 
 ## Required Patterns

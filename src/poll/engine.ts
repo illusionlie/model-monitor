@@ -10,6 +10,7 @@
  */
 import type { Env } from '../env';
 import { sha256Hex } from '../lib/crypto';
+import { parseStoredHeaders } from '../lib/headers';
 import { acquireRunLock, releaseRunLock } from '../lib/lock';
 import { weeklyDue } from '../lib/time';
 import { getSettings, parseAllowlistSetting, saveSettings, type SettingsMap } from '../db/settings';
@@ -65,10 +66,19 @@ class HttpProbeError extends Error {
   }
 }
 
-async function fetchBody(src: SourceRow): Promise<ArrayBuffer> {
+/** fetch 请求头构造(纯函数):优先级 accept(内置)< Bearer(api_key 派生)< 自定义头(最后合并可覆盖,支持 x-api-key 等非 Bearer 鉴权) */
+export function buildFetchHeaders(src: Pick<SourceRow, 'api_key' | 'extra_headers'>): Record<string, string> {
   const headers: Record<string, string> = { accept: 'application/json' };
   if (src.api_key) headers.authorization = `Bearer ${src.api_key}`;
-  const res = await fetch(src.base_url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  Object.assign(headers, parseStoredHeaders(src.extra_headers));
+  return headers;
+}
+
+async function fetchBody(src: SourceRow): Promise<ArrayBuffer> {
+  const res = await fetch(src.base_url, {
+    headers: buildFetchHeaders(src),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) throw new HttpProbeError(res.status);
   return res.arrayBuffer();
 }

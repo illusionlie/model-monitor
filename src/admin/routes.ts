@@ -19,10 +19,13 @@ import {
   markCatalogsRebaseline,
   resetSourceModels,
   setSourceEnabled,
+  updateChannelSource,
+  type ChannelSourcePatch,
 } from '../db/sources';
 import { countModelsBySource } from '../db/models';
 import { recentEvents } from '../db/events';
 import { pbkdf2Hash, randomToken, timingSafeEqual } from '../lib/crypto';
+import { parseStoredHeaders, sanitizeHeaderMap } from '../lib/headers';
 import { runOnce } from '../poll/engine';
 import { makeNotifyHooks, sendTestNotification } from '../notify/dispatch';
 import { SESSION_COOKIE, SESSION_TTL_MS, issueSessionToken, verifyAdminPassword, verifySessionToken } from './auth';
@@ -177,20 +180,26 @@ export function registerRoutes(app: Hono<{ Bindings: Env }>): void {
         feed_secret: settings['feed_secret'] ?? '',
         weekly_last_sent: settings['weekly_last_sent'] ?? null,
       },
-      sources: sources.map((s) => ({
-        id: s.id,
-        kind: s.kind,
-        name: s.name,
-        base_url: s.base_url,
-        has_api_key: Boolean(s.api_key),
-        enabled: s.enabled === 1,
-        seed_done: s.seed_done === 1,
-        rebaseline: s.rebaseline === 1,
-        last_success: s.last_success,
-        last_error: s.last_error,
-        consecutive_failures: s.consecutive_failures,
-        model_count: counts.get(s.id) ?? 0,
-      })),
+      sources: sources.map((s) => {
+        // 自定义头明文回显(编辑表单预填);api_key 仍只回 has_api_key(机密纪律)
+        const extraHeaders = parseStoredHeaders(s.extra_headers);
+        return {
+          id: s.id,
+          kind: s.kind,
+          name: s.name,
+          base_url: s.base_url,
+          has_api_key: Boolean(s.api_key),
+          extra_headers: extraHeaders,
+          has_extra_headers: Object.keys(extraHeaders).length > 0,
+          enabled: s.enabled === 1,
+          seed_done: s.seed_done === 1,
+          rebaseline: s.rebaseline === 1,
+          last_success: s.last_success,
+          last_error: s.last_error,
+          consecutive_failures: s.consecutive_failures,
+          model_count: counts.get(s.id) ?? 0,
+        };
+      }),
       events: events.map((e) => ({
         id: e.id,
         source_name: e.source_name,
@@ -265,7 +274,18 @@ export function registerRoutes(app: Hono<{ Bindings: Env }>): void {
     if (!name || name.length > 64) return c.json({ error: '名称必填(≤64 字符)' }, 400);
     if (!/^https?:\/\//.test(baseUrl) || baseUrl.length > 512)
       return c.json({ error: 'base_url 必须是 http(s) 端点(≤512 字符)' }, 400);
-    const id = await createChannelSource(c.env.DB, { name, base_url: baseUrl, api_key: apiKey }, nowIso());
+    // 自定义请求头:可选对象,整体校验(sanitize);空对象合法(存 '{}'),未提供存 NULL
+    let extraHeaders: string | null = null;
+    if ('extra_headers' in body) {
+      const sanitized = sanitizeHeaderMap(body.extra_headers);
+      if (!sanitized) return c.json({ error: '自定义请求头格式非法' }, 400);
+      extraHeaders = JSON.stringify(sanitized);
+    }
+    const id = await createChannelSource(
+      c.env.DB,
+      { name, base_url: baseUrl, api_key: apiKey, extra_headers: extraHeaders },
+      nowIso(),
+    );
     console.log(`[admin] 新增渠道源 ${name} → id=${id}`);
     return c.json({ ok: true, id });
   });
@@ -281,14 +301,61 @@ export function registerRoutes(app: Hono<{ Bindings: Env }>): void {
     return c.json({ ok: true });
   });
 
+  // 渠道源完整编辑(design §3.2):enabled 行为不变;name/base_url/api_key/extra_headers 仅渠道源可改
   app.patch('/admin/api/sources/:id', async (c) => {
     const id = Number(c.req.param('id'));
     if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'bad_id' }, 400);
     const body = await readJsonBody(c);
-    if (!body || typeof body.enabled !== 'boolean') return c.json({ error: '需要 {enabled: boolean}' }, 400);
+    if (!body) return c.json({ error: 'bad_request' }, 400);
+    const hasEdit = ['name', 'base_url', 'api_key', 'extra_headers'].some((k) => k in body);
+    if (body.enabled !== undefined && typeof body.enabled !== 'boolean')
+      return c.json({ error: '需要 {enabled: boolean}' }, 400);
+    if (!hasEdit && body.enabled === undefined) return c.json({ error: '需要 {enabled: boolean}' }, 400);
     const src = await getSource(c.env.DB, id);
     if (!src) return c.json({ error: 'not_found' }, 404);
-    await setSourceEnabled(c.env.DB, id, body.enabled, nowIso());
+    if (hasEdit && src.kind !== 'channel') return c.json({ error: '内置目录源不可编辑,只可启停' }, 400);
+
+    const patch: ChannelSourcePatch = {};
+    if ('name' in body) {
+      if (typeof body.name !== 'string') return c.json({ error: '名称必填(≤64 字符)' }, 400);
+      const name = body.name.trim();
+      if (!name || name.length > 64) return c.json({ error: '名称必填(≤64 字符)' }, 400);
+      patch.name = name;
+    }
+    if ('base_url' in body) {
+      if (typeof body.base_url !== 'string')
+        return c.json({ error: 'base_url 必须是 http(s) 端点(≤512 字符)' }, 400);
+      const baseUrl = body.base_url.trim();
+      if (!/^https?:\/\//.test(baseUrl) || baseUrl.length > 512)
+        return c.json({ error: 'base_url 必须是 http(s) 端点(≤512 字符)' }, 400);
+      patch.base_url = baseUrl;
+    }
+    if ('api_key' in body) {
+      const v = body.api_key;
+      if (v === null) patch.api_key = null; // null = 清空
+      else if (typeof v === 'string') {
+        const key = v.trim();
+        if (key) patch.api_key = key; // 非空 = 更新;空串 = 不修改
+      } else return c.json({ error: 'api_key 必须是字符串或 null' }, 400);
+    }
+    if ('extra_headers' in body) {
+      const v = body.extra_headers;
+      if (v === null) patch.extra_headers = null; // null = 清空
+      else {
+        const sanitized = sanitizeHeaderMap(v); // 对象 = 整体替换;空对象 → '{}'
+        if (!sanitized) return c.json({ error: '自定义请求头格式非法' }, 400);
+        patch.extra_headers = JSON.stringify(sanitized);
+      }
+    }
+
+    if (Object.keys(patch).length > 0) await updateChannelSource(c.env.DB, id, patch, nowIso());
+    // 端点实变 → 静默重接入(清存量 + 下轮一条 seed 确认;events 审计保留)
+    if (patch.base_url !== undefined && patch.base_url !== src.base_url) {
+      await resetSourceModels(c.env.DB, id, nowIso());
+      console.log(`[admin] 渠道源 ${src.name}(id=${id})端点变更 → 静默重接入`);
+    }
+    if (body.enabled !== undefined) await setSourceEnabled(c.env.DB, id, body.enabled, nowIso());
+    if (hasEdit) console.log(`[admin] 编辑渠道源 ${src.name}(id=${id})`);
     return c.json({ ok: true });
   });
 

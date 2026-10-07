@@ -6,7 +6,7 @@
 
 ## Overview
 
-One deployable unit. Everything runs in the same Worker: cron poller, notification dispatcher, admin UI, feed endpoint. No separate frontend app — admin pages are server-rendered HTML strings from `src/admin/ui.ts`.
+One deployable unit. Everything runs in the same Worker: cron poller, notification dispatcher, admin UI, feed endpoint. No separate frontend app — admin pages are server-rendered HTML strings from `src/admin/ui/` (inline CSS + vanilla JS, no build step).
 
 ---
 
@@ -17,11 +17,11 @@ src/
 ├── index.ts          # entry: export default { fetch, scheduled } — wiring only, no logic
 ├── app.ts            # Hono assembly: mounts admin/feed routes
 ├── env.ts            # Env type — DB + SEND_EMAIL bindings ONLY (business secrets are D1 data)
-├── lib/              # pure utilities, no I/O deps: cron, time (Beijing/UTC + weekly gate), lock, crypto
+├── lib/              # pure utilities, no I/O deps: cron, time (Beijing/UTC + weekly gate), lock, crypto, headers
 ├── db/               # D1 access layer, one file per table; only place SQL lives
-├── poll/             # engine.ts (runOnce orchestrator), normalize.ts (3 source shapes), diff.ts (pure state machine)
+├── poll/             # engine.ts (runOnce orchestrator, buildFetchHeaders), normalize.ts (3 source shapes), diff.ts (pure state machine)
 ├── notify/           # render.ts (message templates, single owner), telegram.ts, email.ts, dispatch.ts (channel matrix), weekly.ts
-└── admin/            # auth.ts (PBKDF2 + cookie), routes.ts, ui.ts (HTML)
+└── admin/            # auth.ts (PBKDF2 + cookie), routes.ts, ui/ (css / page + theme, setup, login, admin tabs+dialog, index re-export)
 migrations/           # numbered SQL migrations
 scripts/cron-expr.mjs # CLI wrapper over src/lib/cron.ts (imports .ts directly, node ≥23.6 type stripping)
 test/                 # vitest, pure-logic + stubbed D1; may use node APIs (src/ may not)

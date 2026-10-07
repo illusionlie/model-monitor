@@ -1,136 +1,24 @@
 /**
- * 后台页面(design §1/§9):服务端拼 HTML 字符串 + 内联 CSS + 少量 vanilla JS(fetch 调 admin API)。
- * 单 admin 页搞定全部管理;移动端可用(响应式 + 表格横向滚动)。
- * 客户端 JS 全程用 DOM API(textContent)渲染远端数据,防注入;不引入任何构建步骤。
- * 注意:客户端脚本内禁用反引号与 "${",避免与 TS 模板字面量冲突。
+ * 后台单页(design §4.2-§4.6):五标签页(overview/sources/notify/events/security)+ hash 持久 +
+ * 主题三态切换 + 渠道编辑 <dialog>(名称/URL/API Key/自定义请求头,行式 Name: value)。
+ * 渲染纪律:远端数据一律 DOM API(textContent / .value)填充,禁 innerHTML 插远端字符串。
+ * 客户端脚本内禁用反引号与 "${",字符串一律单引号拼接。
  */
-
-const BASE_CSS = `
-:root{color-scheme:light}
-*{box-sizing:border-box}
-body{font-family:-apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;background:#f4f5f7;color:#1c1e21;font-size:14px;line-height:1.55}
-.wrap{max-width:860px;margin:0 auto;padding:16px}
-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-h1{font-size:18px;margin:0}
-h2{font-size:15px;margin:0 0 10px}
-.card{background:#fff;border:1px solid #e3e5e8;border-radius:10px;padding:14px 16px;margin-bottom:14px}
-button{font:inherit;border:1px solid #c9ccd1;background:#fff;border-radius:7px;padding:6px 12px;cursor:pointer}
-button:hover{background:#f0f2f5}
-button.primary{background:#2563eb;border-color:#2563eb;color:#fff}
-button.primary:hover{background:#1d4fd7}
-button.danger{color:#b3261e;border-color:#d8a09b}
-button:disabled{opacity:.5;cursor:default}
-input,select,textarea{font:inherit;width:100%;padding:7px 9px;border:1px solid #c9ccd1;border-radius:7px;background:#fff}
-textarea{min-height:64px;resize:vertical}
-label{display:block;font-size:13px;color:#555;margin:8px 0 3px}
-.chk{display:flex;align-items:center;gap:6px;margin:6px 0;font-size:13px;color:#333}
-.chk input{width:auto}
-.row{display:flex;gap:8px;flex-wrap:wrap}
-.row>*{flex:1;min-width:140px}
-fieldset{border:1px solid #e3e5e8;border-radius:8px;margin:0 0 10px;padding:8px 12px 10px}
-legend{font-size:13px;color:#2563eb;padding:0 4px}
-.btnrow{display:flex;gap:8px;flex-wrap:wrap}
-.tblwrap{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{padding:6px 8px;border-bottom:1px solid #eceef0;text-align:left;vertical-align:top;white-space:nowrap}
-th{color:#666;font-weight:600}
-td.wrap,th.wrap{white-space:normal}
-.muted{color:#8a8f98;font-size:12px}
-.out{background:#0f172a;color:#d7e3ff;border-radius:8px;padding:10px;font-size:12px;white-space:pre-wrap;word-break:break-all;margin-top:10px}
-.tag{display:inline-block;border-radius:9px;padding:0 8px;font-size:12px;color:#fff}
-.t-added{background:#0a7d32}.t-delisted{background:#b3261e}.t-seed{background:#5567c2}.t-source_fail{background:#b3691e}.t-source_recovered{background:#0e7490}
-.ok{color:#0a7d32}.err{color:#b3261e}
-code{background:#eef0f3;padding:1px 5px;border-radius:4px;font-size:12px;word-break:break-all}
-`;
-
-function page(title: string, body: string, script = ''): string {
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${BASE_CSS}</style></head><body><div class="wrap">${body}</div>${script}</body></html>`;
-}
-
-// ---------- setup ----------
-
-export function renderSetupPage(): string {
-  const body = `
-<header><h1>📡 模型监视 · 初始化</h1></header>
-<div class="card">
-  <h2>设置管理密码</h2>
-  <p class="muted">设置完成后本页永久关闭。业务密钥(TG token、邮箱等)只存 Cloudflare D1,可稍后在后台再配。</p>
-  <form id="f">
-    <label>管理密码(≥ 8 位)</label><input type="password" id="password" autocomplete="new-password" required minlength="8">
-    <label>确认密码</label><input type="password" id="password2" autocomplete="new-password" required minlength="8">
-    <fieldset><legend>Telegram(可选,稍后可改)</legend>
-      <label>Bot Token</label><input type="password" id="tg_bot_token" placeholder="123456:ABC-..." autocomplete="off">
-      <label>Chat ID</label><input id="tg_chat_id" placeholder="如 123456789" autocomplete="off">
-      <div class="chk"><input type="checkbox" id="tg_realtime" checked><span>实时通知</span></div>
-    </fieldset>
-    <fieldset><legend>邮件(可选,稍后可改)</legend>
-      <label>传输方式</label><select id="email_transport"><option value="send_email">send_email(Cloudflare,主力)</option><option value="resend">Resend(后备)</option></select>
-      <label>发件地址(需为已验证域)</label><input id="email_from" placeholder="monitor@example.com" autocomplete="off">
-      <label>收件地址</label><input id="email_to" placeholder="me@example.com" autocomplete="off">
-      <div class="chk"><input type="checkbox" id="email_realtime" checked><span>实时通知</span></div>
-    </fieldset>
-    <div class="btnrow" style="margin-top:10px"><button class="primary" type="submit">完成初始化</button></div>
-    <div class="out" id="out" hidden></div>
-  </form>
-</div>`;
-  const script = `<script>
-function $(id){return document.getElementById(id);}
-$('f').addEventListener('submit',async function(ev){
-  ev.preventDefault();
-  var out=$('out');out.hidden=false;out.textContent='提交中…';
-  if($('password').value!==$('password2').value){out.textContent='两次密码不一致';return;}
-  var body={password:$('password').value};
-  var k;
-  var map={tg_bot_token:'v',tg_chat_id:'v',email_transport:'v',email_from:'v',email_to:'v'};
-  for(k in map){var el=$(k);if(el&&el.value.trim())body[k]=el.value.trim();}
-  if($('tg_realtime').checked)body.tg_realtime=true;
-  if($('email_realtime').checked)body.email_realtime=true;
-  try{
-    var res=await fetch('/setup',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
-    var j=await res.json().catch(function(){return{};});
-    if(!res.ok)throw new Error(j.error||('HTTP '+res.status));
-    out.textContent='初始化成功,正在进入后台…';
-    location.href='/admin';
-  }catch(e){out.textContent='失败:'+e.message;}
-});
-</script>`;
-  return page('初始化 · 模型监视', body, script);
-}
-
-// ---------- login ----------
-
-export function renderLoginPage(): string {
-  const body = `
-<header><h1>📡 模型监视 · 登录</h1></header>
-<div class="card" style="max-width:420px;margin:40px auto">
-  <form id="f">
-    <label>管理密码</label><input type="password" id="password" autocomplete="current-password" required autofocus>
-    <div class="btnrow" style="margin-top:10px"><button class="primary" type="submit" style="width:100%">登录</button></div>
-    <div class="out" id="out" hidden></div>
-  </form>
-</div>`;
-  const script = `<script>
-function $(id){return document.getElementById(id);}
-$('f').addEventListener('submit',async function(ev){
-  ev.preventDefault();
-  var out=$('out');out.hidden=false;out.textContent='验证中…';
-  try{
-    var res=await fetch('/admin/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:$('password').value})});
-    var j=await res.json().catch(function(){return{};});
-    if(!res.ok)throw new Error(j.error||'密码错误');
-    location.href='/admin';
-  }catch(e){out.textContent='失败:'+e.message;}
-});
-</script>`;
-  return page('登录 · 模型监视', body, script);
-}
-
-// ---------- admin(单页) ----------
+import { page } from './page';
 
 export function renderAdminPage(): string {
   const body = `
-<header><h1>📡 模型监视 · 后台</h1><button id="logout">登出</button></header>
+<header><h1>📡 模型监视 · 后台</h1><div class="btnrow"><button type="button" id="themeBtn" aria-label="主题:跟随系统" title="主题:跟随系统">🌗</button><button type="button" id="logout">登出</button></div></header>
 
+<nav class="tabs" role="tablist" aria-label="后台分区">
+<button type="button" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" class="active">概览</button>
+<button type="button" role="tab" id="tab-sources" aria-controls="panel-sources" aria-selected="false">源管理</button>
+<button type="button" role="tab" id="tab-notify" aria-controls="panel-notify" aria-selected="false">通知设置</button>
+<button type="button" role="tab" id="tab-events" aria-controls="panel-events" aria-selected="false">事件</button>
+<button type="button" role="tab" id="tab-security" aria-controls="panel-security" aria-selected="false">安全</button>
+</nav>
+
+<section role="tabpanel" id="panel-overview" aria-labelledby="tab-overview">
 <div class="card">
   <h2>操作</h2>
   <div class="btnrow">
@@ -141,7 +29,30 @@ export function renderAdminPage(): string {
   <div class="out" id="opsOut" hidden></div>
   <p class="muted" style="margin-top:10px">Feed 读取:<code>GET /feed</code>,请求头 <code>X-Feed-Secret: <span id="feedSecret" class="mono">-</span></code>(时间倒序 100 条事件 + 每源统计)</p>
 </div>
+</section>
 
+<section role="tabpanel" id="panel-sources" hidden aria-labelledby="tab-sources">
+<div class="card">
+  <h2>源管理</h2>
+  <div class="tblwrap" id="sourcesBox"><p class="muted">加载中…</p></div>
+  <form id="srcForm" style="margin-top:12px">
+    <div class="row">
+      <div><label>名称</label><input id="srcName" placeholder="如 OpenCode Zen"></div>
+      <div style="flex:2"><label>Models 端点(GET {base_url} 须返回 {data:[{id}]})</label><input id="srcUrl" placeholder="https://.../v1/models"></div>
+      <div><label>API Key(可选)</label><input type="password" id="srcKey" autocomplete="off"></div>
+    </div>
+    <details>
+      <summary>自定义请求头(可选,点击展开)</summary>
+      <label>每行一条,格式 Name: value;# 开头行忽略;优先级高于内置 accept 与 Bearer 鉴权头</label>
+      <textarea id="srcHeaders" placeholder="x-api-key: sk-...&#10;# 注释行忽略"></textarea>
+    </details>
+    <div class="btnrow" style="margin-top:8px"><button type="submit">添加渠道源</button></div>
+    <p class="muted">内置目录源(OpenRouter / models.dev)不可删除,只可启停。新源首轮静默 seed:仅发一条接入确认。「清理模型」可清空某源存量并复位为静默接入状态(源配置与事件记录保留)。</p>
+  </form>
+</div>
+</section>
+
+<section role="tabpanel" id="panel-notify" hidden aria-labelledby="tab-notify">
 <div class="card">
   <h2>通知与监控设置</h2>
   <form id="notifyForm">
@@ -178,7 +89,16 @@ export function renderAdminPage(): string {
     <div class="out" id="notifyOut" hidden></div>
   </form>
 </div>
+</section>
 
+<section role="tabpanel" id="panel-events" hidden aria-labelledby="tab-events">
+<div class="card">
+  <h2>最近事件(50)</h2>
+  <div class="tblwrap" id="eventsBox"><p class="muted">加载中…</p></div>
+</div>
+</section>
+
+<section role="tabpanel" id="panel-security" hidden aria-labelledby="tab-security">
 <div class="card">
   <h2>修改管理密码</h2>
   <form id="pwForm" class="row" style="align-items:flex-end">
@@ -188,25 +108,21 @@ export function renderAdminPage(): string {
   <p class="muted" style="margin-top:8px">更新会重新生成会话签名密钥:其他设备的登录全部失效,当前浏览器自动续期。</p>
   <div class="out" id="pwOut" hidden></div>
 </div>
+</section>
 
-<div class="card">
-  <h2>源管理</h2>
-  <div class="tblwrap" id="sourcesBox"><p class="muted">加载中…</p></div>
-  <form id="srcForm" style="margin-top:12px">
-    <div class="row">
-      <div><label>名称</label><input id="srcName" placeholder="如 OpenCode Zen"></div>
-      <div style="flex:2"><label>Models 端点(GET {base_url} 须返回 {data:[{id}]})</label><input id="srcUrl" placeholder="https://.../v1/models"></div>
-      <div><label>API Key(可选)</label><input type="password" id="srcKey" autocomplete="off"></div>
-    </div>
-    <div class="btnrow" style="margin-top:8px"><button type="submit">添加渠道源</button></div>
-    <p class="muted">内置目录源(OpenRouter / models.dev)不可删除,只可启停。新源首轮静默 seed:仅发一条接入确认。「清理模型」可清空某源存量并复位为静默接入状态(源配置与事件记录保留)。</p>
+<dialog id="editDlg" aria-labelledby="editDlgTitle">
+  <h2 id="editDlgTitle" style="margin:0 0 10px">编辑渠道源</h2>
+  <form id="editForm">
+    <label>名称</label><input id="edName" autocomplete="off">
+    <label>Models 端点(GET {base_url} 须返回 {data:[{id}]})</label><input id="edUrl" autocomplete="off">
+    <label>API Key</label><input type="password" id="edKey" autocomplete="off" placeholder="留空 = 不修改">
+    <div class="chk"><input type="checkbox" id="edKeyClear"><span>清空 API Key</span></div>
+    <label>自定义请求头(每行一条,格式 Name: value;# 开头行忽略;优先级高于内置 accept 与 Bearer 鉴权头)</label>
+    <textarea id="edHeaders" placeholder="x-api-key: sk-...&#10;# 注释行忽略"></textarea>
+    <div class="chk"><input type="checkbox" id="edHeadersClear"><span>清空全部自定义请求头</span></div>
+    <div class="btnrow" style="margin-top:10px"><button type="button" id="edCancel">取消</button><button class="primary" type="submit">保存</button></div>
   </form>
-</div>
-
-<div class="card">
-  <h2>最近事件(50)</h2>
-  <div class="tblwrap" id="eventsBox"><p class="muted">加载中…</p></div>
-</div>`;
+</dialog>`;
 
   const script = `<script>
 var S=null;
@@ -230,6 +146,70 @@ function fmtParts(d,tz){
 function fmtDual(iso){try{var d=new Date(iso);return '北京 '+fmtParts(d,'Asia/Shanghai')+' (UTC '+fmtParts(d,'UTC')+')';}catch(e){return iso;}}
 var KINDS={added:['新增','t-added'],delisted:['下架','t-delisted'],seed:['接入','t-seed'],source_fail:['失败','t-source_fail'],source_recovered:['恢复','t-source_recovered']};
 function showOut(id,text){var o=$(id);o.hidden=false;o.textContent=text;}
+
+// ---- 标签页(hash 持久 + panelIn 进入动画) ----
+var TABS=['overview','sources','notify','events','security'];
+function showTab(id){
+  if(TABS.indexOf(id)<0)id='overview';
+  TABS.forEach(function(t){
+    var on=t===id,b=$('tab-'+t),p=$('panel-'+t);
+    b.classList.toggle('active',on);
+    b.setAttribute('aria-selected',on?'true':'false');
+    if(on&&p.hidden){p.hidden=false;p.classList.remove('enter');void p.offsetWidth;p.classList.add('enter');}
+    if(!on)p.hidden=true;
+  });
+  history.replaceState(null,'','#tab-'+id);
+}
+TABS.forEach(function(t){
+  $('tab-'+t).addEventListener('click',function(){showTab(t);});
+  $('panel-'+t).addEventListener('animationend',function(e){if(e.animationName==='panelIn')e.target.classList.remove('enter');});
+});
+showTab((location.hash||'').replace('#tab-',''));
+
+// ---- 主题三态(auto/light/dark 循环;auto 交还系统) ----
+var THEME_ORDER=['auto','light','dark'];
+var THEME_ICON={auto:'🌗',light:'☀️',dark:'🌙'};
+var THEME_LABEL={auto:'跟随系统',light:'亮色',dark:'暗色'};
+function themeMode(){
+  try{var v=localStorage.getItem('mm_theme');if(v==='light'||v==='dark')return v;}catch(e){}
+  return 'auto';
+}
+function applyTheme(mode){
+  if(mode==='light'||mode==='dark')document.documentElement.dataset.theme=mode;
+  else document.documentElement.removeAttribute('data-theme');
+  var label='主题:'+THEME_LABEL[mode];
+  var b=$('themeBtn');b.textContent=THEME_ICON[mode];b.setAttribute('aria-label',label);b.title=label;
+}
+$('themeBtn').addEventListener('click',function(){
+  var next=THEME_ORDER[(THEME_ORDER.indexOf(themeMode())+1)%THEME_ORDER.length];
+  try{
+    if(next==='auto')localStorage.removeItem('mm_theme');
+    else localStorage.setItem('mm_theme',next);
+  }catch(e){}
+  applyTheme(next);
+});
+applyTheme(themeMode());
+
+// ---- 自定义请求头行式文本(每行 Name: value;首个 ':' 前为名后为值;空行与 '#' 开头行跳过) ----
+function headersToText(map){
+  if(!map)return '';
+  var lines=[];
+  for(var k in map)lines.push(k+': '+map[k]);
+  return lines.join('\\n');
+}
+function parseHeaderText(text){
+  var out={},lines=String(text||'').split('\\n');
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i].trim();
+    if(!line||line.charAt(0)==='#')continue;
+    var idx=line.indexOf(':');
+    if(idx<=0)return null;
+    var name=line.slice(0,idx).trim();
+    if(!name)return null;
+    out[name]=line.slice(idx+1).trim();
+  }
+  return out;
+}
 
 function fillNotify(){
   var s=S.settings;
@@ -266,10 +246,16 @@ function renderSources(){
     var rst=el('button',null,'清理模型');
     rst.addEventListener('click',function(){resetSource(src);});
     op.appendChild(rst);
-    if(src.kind==='channel'){op.appendChild(document.createTextNode(' '));
+    if(src.kind==='channel'){
+      op.appendChild(document.createTextNode(' '));
+      var ed=el('button',null,'编辑');
+      ed.addEventListener('click',function(){openEdit(src);});
+      op.appendChild(ed);
+      op.appendChild(document.createTextNode(' '));
       var del=el('button','danger','删除');
       del.addEventListener('click',function(){delSource(src);});
-      op.appendChild(del);}
+      op.appendChild(del);
+    }
     tr.appendChild(op);tb.appendChild(tr);
   });
   t.appendChild(tb);box.appendChild(t);
@@ -310,6 +296,45 @@ async function resetSource(src){
   try{await api('/admin/api/sources/'+src.id+'/reset','POST');await loadState();}
   catch(e){alert('清理失败:'+e.message);}
 }
+// ---- 渠道编辑 dialog(一个 dialog 复用,预填走 .value) ----
+var editing=null;
+function openEdit(src){
+  editing=src;
+  $('edName').value=src.name;
+  $('edUrl').value=src.base_url;
+  $('edKey').value='';
+  $('edKey').placeholder=src.has_api_key?'已配置,留空 = 不修改':'未配置';
+  $('edKeyClear').checked=false;
+  $('edHeaders').value=headersToText(src.extra_headers);
+  $('edHeadersClear').checked=false;
+  $('editDlg').showModal();
+}
+$('edCancel').addEventListener('click',function(){$('editDlg').close();});
+$('editForm').addEventListener('submit',async function(ev){
+  ev.preventDefault();
+  if(!editing)return;
+  var body={name:$('edName').value.trim(),base_url:$('edUrl').value.trim()};
+  if(!body.name||!/^https?:\\/\\//.test(body.base_url)){alert('名称必填,端点须为 http(s) URL。');return;}
+  var keyVal=$('edKey').value.trim();
+  if($('edKeyClear').checked){
+    body.api_key=null;
+    if(keyVal)alert('已同时填写新 API Key 与勾选「清空 API Key」:将以清空为准。');
+  }else if(keyVal){
+    body.api_key=keyVal;
+  }
+  if($('edHeadersClear').checked){
+    body.extra_headers=null;
+  }else{
+    var parsed=parseHeaderText($('edHeaders').value);
+    if(!parsed){alert('自定义请求头格式错误:每行需为 Name: value(首个冒号前为名称)。');return;}
+    body.extra_headers=parsed;
+  }
+  try{
+    await api('/admin/api/sources/'+editing.id,'PATCH',body);
+    $('editDlg').close();
+    await loadState();
+  }catch(e){alert('保存失败:'+e.message);}
+});
 $('logout').addEventListener('click',async function(){try{await api('/admin/logout','POST');}catch(e){}location.href='/admin';});
 $('run').addEventListener('click',async function(){
   showOut('opsOut','运行中(每源最多 15s 超时)…');
@@ -363,9 +388,13 @@ $('pwForm').addEventListener('submit',async function(ev){
 });
 $('srcForm').addEventListener('submit',async function(ev){
   ev.preventDefault();
+  var headers=parseHeaderText($('srcHeaders').value);
+  if(!headers){alert('自定义请求头格式错误:每行需为 Name: value(首个冒号前为名称)。');return;}
+  var body={name:$('srcName').value.trim(),base_url:$('srcUrl').value.trim(),extra_headers:headers};
+  if($('srcKey').value.trim())body.api_key=$('srcKey').value.trim();
   try{
-    await api('/admin/api/sources','POST',{name:$('srcName').value.trim(),base_url:$('srcUrl').value.trim(),api_key:$('srcKey').value.trim()||undefined});
-    $('srcName').value='';$('srcUrl').value='';$('srcKey').value='';
+    await api('/admin/api/sources','POST',body);
+    $('srcName').value='';$('srcUrl').value='';$('srcKey').value='';$('srcHeaders').value='';
     await loadState();
   }catch(e){alert('添加失败:'+e.message);}
 });
