@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "测试清单与边界用例要求,核对新增用例是否达标"}
+{"file": ".trellis/spec/product/data-sources.md", "reason": "核对端点切换后实现与数据源契约一致"}
+{"file": ".trellis/spec/product/event-semantics.md", "reason": "核对 rebaseline 静默重建与 seed 重接入语义未被破坏"}
+{"file": ".trellis/spec/backend/index.md", "reason": "编码规范与生产环境注意点"}

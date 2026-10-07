@@ -1,11 +1,11 @@
-# 已核实的外部事实(2026-10-06,过期请重核)
+# 已核实的外部事实(2026-10-07,过期请重核)
 
-> 原 `DECISIONS.md` §9(2026-10-07 迁入)。**核实纪律**:下表事实核实于 2026-10-06;使用时若怀疑过期,重新核实而不是凭记忆。更新时改数值并同步本文件的核实日期。
+> 原 `DECISIONS.md` §9(2026-10-07 迁入)。**核实纪律**:下表事实最近核实于 2026-10-07(models.dev 行;其余为 2026-10-06);使用时若怀疑过期,重新核实而不是凭记忆。更新时改数值并同步本文件的核实日期。
 
 | 事实 | 数值/结论 |
 |---|---|
 | OpenRouter `/api/v1/models` | 免鉴权 200;~772KB;464 模型;无 ETag(需自做 hash);含 `created`(真实) |
-| models.dev `/api.json` | 200;~5.3MB;provider→models 字典;无瘦身子端点(302 探测无果) |
+| models.dev `/models.json` | 200;~409KB;application/json;顶层扁平 `lab/model → 富字段` 字典(2026-10-07 经代理实测)。旧 `/api.json`(~5.3MB,provider→models 二层字典)仍可用,normalize 兼容 |
 | OpenCode Zen `https://opencode.ai/zen/v1/models` | 免鉴权 200;86 模型;**`created` 是响应生成时刻(全同值且随请求变化),是噪声,不可作信号** |
 | Cline Provider `https://api.cline.bot/api/v1/models` | 免鉴权 200;464 模型;id 为 `vendor/model` 式;`created` 真实(375 个不同值)。注意 ClinePass 是订阅档、非 API |
 | Workers 免费档 | cron 5 个/账号;subrequest 50/次调用(**KV/D1 binding 也计入**);10 万请求/天;CPU 10ms/次(允许偶发突发) |

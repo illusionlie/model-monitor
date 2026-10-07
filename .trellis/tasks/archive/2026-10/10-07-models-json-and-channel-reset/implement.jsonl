@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/product/data-sources.md", "reason": "数据源契约:目录源语义/结构自适配/allowlist 规则,端点切换的契约依据"}
+{"file": ".trellis/spec/product/event-semantics.md", "reason": "seed/rebaseline/目录组去重的事件语义:静默重建与重接入行为的权威定义"}
+{"file": ".trellis/spec/product/admin-and-feed.md", "reason": "后台路由与 UI 契约:新增渠道清理操作需遵守的边界"}
+{"file": ".trellis/spec/backend/index.md", "reason": "编码规范入口与 workerd 生产环境坑"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "D1 访问纪律:SQL 归层、db.batch、分块与 subrequest 核算方法"}

@@ -28,3 +28,24 @@
 ### Status
 
 [OK] **Completed**
+
+## Session 2: models.dev 切换 /models.json + 后台源存量清理
+
+**Date**: 2026-10-07
+**Task**: 10-07-models-json-and-channel-reset
+**Branch**: `main`
+
+### Summary
+
+两个交付物:1) models.dev 目录源从 /api.json(全 provider 渠道面,~5.3MB)切换到 /models.json(扁平 lab/model 字典,~409KB,经代理实测),口径收敛为"实验室级有哪些新模型";迁移 0002 置 rebaseline=1 静默重建,零事件零通知。normalize 字典适配改为按条目分派,旧二层结构保持兼容。2) 后台新增源存量清理:POST /admin/api/sources/:id/reset + UI 按钮(所有源可用,经用户质询后去掉 kind 400 限制——清理非破坏性),清 models 行 + seed_done=0 → 下轮静默重 seed。trellis-implement/check 双子代理流,typecheck 0 错、79 用例全绿(新增 6);spec 同步 data-sources.md / external-facts.md(核实日期 2026-10-07)。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bed73d7` | feat: models.dev 切换 /models.json 实验室级目录 + 后台源存量清理 |
+
+### Status
+
+[OK] **Completed**
+
