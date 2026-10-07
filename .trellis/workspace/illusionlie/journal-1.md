@@ -70,3 +70,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: 渠道自定义请求头 + 后台 UI 重构
+
+**Date**: 2026-10-07
+**Task**: 10-07-channel-headers-admin-ui
+**Branch**: `main`
+
+### Summary
+
+用户需求:①每渠道自定义请求头 ②后台 UI 改分组标签页 + 动画/响应式/亮暗切换。AskUserQuestion 定三个决策:单任务 / 渠道顺带做完整编辑(名称/URL/API Key/头) / 头值回显(api_key 维持不回显纪律)。实现:migration 0003 加 sources.extra_headers(JSON);lib/headers.ts 双入口(parseStoredHeaders 容错读 + sanitizeHeaderMap 写校验,≤16 头/CRLF/C0/大小写冲突防护);engine 提取 buildFetchHeaders(accept < Bearer < 自定义头,轮询预算零增加);PATCH 扩展完整编辑(留空=不改/null=清空;改 URL 触发 resetSourceModels 静默重接入);ui.ts→ui/ 目录重构(CSS 变量三态主题 + 防 FOUC + 五标签页 hash 持久 + panelIn/dialogIn + 719.5px 断点 + 原生 dialog 行式 Name: value 头编辑)。双子代理实施 + trellis-check 8 项全 PASS(0 阻塞)+ playwright 手测(登录/编辑保存/坏行拦截/三态主题/375px/无效 hash 回落/reduced-motion 全过)。check 抓出 backend spec 仍引旧 ui.ts,directory-structure/quality-guidelines 已同步。typecheck 0 错、127 用例全绿(+34,新增 test/helpers/d1.ts stub)。本地 admin 密码已改为 handover-test-2026(仅 .wrangler 本地态)。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| (本次) | feat: 渠道自定义请求头 + 渠道编辑 + 后台标签页/暗色/响应式重构 |
+| (本次) | chore: 任务归档(channel-headers-admin-ui) |
+
+### Status
+
+[OK] **Completed**
