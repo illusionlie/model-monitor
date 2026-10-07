@@ -7,7 +7,8 @@
 #   WORKER_NAME         可选  Worker 名,默认 model-monitor
 #   D1_NAME             可选  D1 库名,默认 ${WORKER_NAME}-db
 #   CF_D1_DATABASE_ID   可选  指定既有 D1 的 database_id(会校验存在;否则按 D1_NAME 查找/创建)
-#   CUSTOM_DOMAIN       可选  自定义域名,非空时追加 routes = ["https://<domain>/*"]
+#   CUSTOM_DOMAIN       可选  自定义域名,非空时配置为 Workers 自定义域(custom_domain,
+#                              自动创建 DNS 记录与证书;要求域名 zone 在同一 CF 账号)
 #
 # 业务 secrets(TG token、Resend key、管理密码哈希等)只存 D1 settings,不经 CI(DECISIONS §5)。
 name: Deploy
@@ -116,6 +117,8 @@ jobs:
 
       # 从 wrangler.toml.example 生成 wrangler.toml(不入库,见 .gitignore)。
       # routes 必须是顶层键,插在 compatibility_date 之后([triggers] 等表头之前),不能追加到文件末尾。
+      # CUSTOM_DOMAIN 用 Workers 自定义域(custom_domain=true):自动建 DNS 记录 + 签证书;
+      # 纯字符串路由只做 URL→Worker 映射,不建 DNS/证书,域名无解析记录时浏览器直接连不上。
       - name: Generate wrangler.toml
         env:
           CRON_MINUTES: ${{ inputs.cron_minutes || '' }}
@@ -134,9 +137,13 @@ jobs:
             -e "s|__CRON_EXPRESSION__|${CRON_EXPR}|g" \
             wrangler.toml.example > wrangler.toml
           if [ -n "${CUSTOM_DOMAIN}" ]; then
-            DOMAIN="${CUSTOM_DOMAIN%/}"
-            sed -i "/^compatibility_date =/a routes = [\"https://${DOMAIN}/*\"]" wrangler.toml
-            echo "已追加自定义域名路由:https://${DOMAIN}/*"
+            DOMAIN="$(printf '%s' "${CUSTOM_DOMAIN}" | sed -E 's#^[[:alpha:]]+://##; s#[/?#].*##')"
+            if ! printf '%s' "${DOMAIN}" | grep -qE '^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$'; then
+              echo "::error::CUSTOM_DOMAIN 无法解析为合法主机名(输入:${CUSTOM_DOMAIN} → ${DOMAIN:-空})。请填裸域名,如 monitor.example.com。"
+              exit 1
+            fi
+            sed -i "/^compatibility_date =/a routes = [{ pattern = \"${DOMAIN}\", custom_domain = true }]" wrangler.toml
+            echo "已配置 Workers 自定义域:${DOMAIN}(部署时自动创建 DNS 记录与证书,证书生效约需 1-2 分钟)"
           fi
           echo '----- wrangler.toml -----'
           cat wrangler.toml

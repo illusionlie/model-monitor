@@ -58,7 +58,7 @@ Cloudflare Dashboard → **My Profile → API Tokens → Create Token**(选自�
 | D1 · Edit | Account | 自动创建 D1 库、应用迁移 |
 | Account Settings · Read | Account | wrangler 解析账号信息 |
 
-- 若使用 `CUSTOM_DOMAIN`(自定义域名路由),额外加:Zone · Workers Routes · Edit;
+- 若使用 `CUSTOM_DOMAIN`(Workers 自定义域,自动创建 DNS 记录与证书),额外加:Zone · Workers Routes · Edit(若部署报权限不足,再补 Zone · DNS · Edit);
 - 权限名称以 Cloudflare 官方 [API token 权限文档](https://developers.cloudflare.com/fundamentals/api/reference/permissions/) 为准。
 
 ### 3. 配置 GitHub secrets
@@ -72,7 +72,7 @@ Cloudflare Dashboard → **My Profile → API Tokens → Create Token**(选自�
 | `WORKER_NAME` | 否 | `model-monitor` | Worker 名称(决定 `*.workers.dev` 域名) |
 | `D1_NAME` | 否 | `${WORKER_NAME}-db` | D1 库名;不存在时 CI 自动创建 |
 | `CF_D1_DATABASE_ID` | 否 | — | 指定既有 D1 库的 database_id(CI 会校验存在);留空则按 `D1_NAME` 查找/创建 |
-| `CUSTOM_DOMAIN` | 否 | — | 自定义域名(如 `monitor.example.com`),非空时自动加 `routes` |
+| `CUSTOM_DOMAIN` | 否 | — | 自定义域名(如 `monitor.example.com`),非空时配置为 Workers 自定义域:自动创建 DNS 记录与证书(证书生效约 1-2 分钟);要求该域名的 zone 已加入同一 Cloudflare 账号 |
 
 业务密钥(Telegram token、Resend key、收件地址、管理密码)**不放进 GitHub secrets**——部署后在 `/setup` / `/admin` 里填,只存 D1。
 
@@ -95,7 +95,7 @@ send_email 通道只能发往账号内「已验证目的地地址」,开通路�
   - `cron_minutes`:轮询间隔(分钟)。留空 = 默认 `*/30`;映射规则:`≤59` → `*/N`;`60` → 每小时;`>60` 取整到小时档;`≥1440` → 每天;非法值兜底 `*/30`;
   - `force_migrations`:强制重跑 D1 迁移(正常情况下 CI 检测到待应用迁移才执行)。
 
-CI 流程:校验/创建 D1 → 按需 `d1 migrations apply --remote` → 从 `wrangler.toml.example` 生成 `wrangler.toml`(替换 Worker 名 / D1 id / cron 表达式,可选加 routes)→ `wrangler deploy`。`wrangler.toml` 不入库(已 gitignore)。
+CI 流程:校验/创建 D1 → 按需 `d1 migrations apply --remote` → 从 `wrangler.toml.example` 生成 `wrangler.toml`(替换 Worker 名 / D1 id / cron 表达式,可选配置自定义域)→ `wrangler deploy`。`wrangler.toml` 不入库(已 gitignore)。
 
 ## 初始化
 
