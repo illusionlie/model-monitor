@@ -17,3 +17,16 @@ database_id = "__D1_DATABASE_ID__"
 # 需在 Dashboard 开启 Email(Compute → Email Service)后部署才生效;本地 dev 可注释掉
 [[send_email]]
 name = "SEND_EMAIL"
+
+# Workers 可观测性:logs/traces 全量头采样并持久化,Dashboard(Observability)可查报错与调用链;
+# 免费档额度内(2026-10-07 核实,见 spec:product/external-facts.md)
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+persist = true
