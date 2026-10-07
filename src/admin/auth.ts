@@ -1,6 +1,6 @@
 /**
  * 后台鉴权(design §9):
- * - PBKDF2-SHA256 210k iter(lib/crypto.ts 已有实现)verify 管理密码
+ * - PBKDF2-SHA256 100k iter(workerd 生产上限)verify 管理密码
  * - 无状态签名 cookie mm_session=payload.sig;payload 仅 base64url({"exp":...})(7 天)
  * - HMAC-SHA256(key=session_secret)签名;校验 = 重算 HMAC + 常时比较 + exp
  * - 登出无端点语义:改密码 = 重生成 session_secret → 全部旧会话立即失效

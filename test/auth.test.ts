@@ -10,10 +10,10 @@ import { pbkdf2Hash, pbkdf2Verify, timingSafeEqual } from '../src/lib/crypto';
 const SECRET = 'a'.repeat(64); // 256bit hex
 const OTHER_SECRET = 'b'.repeat(64);
 
-describe('PBKDF2 管理密码(design §9:210k iter / 常时比较)', () => {
+describe('PBKDF2 管理密码(design §9:100k iter(workerd 生产上限)/ 常时比较)', () => {
   it('正确密码 → true;错误密码 → false', async () => {
     const stored = await pbkdf2Hash('correct horse battery staple');
-    expect(stored.iterations).toBe(210_000);
+    expect(stored.iterations).toBe(100_000);
     expect(await pbkdf2Verify('correct horse battery staple', stored)).toBe(true);
     expect(await pbkdf2Verify('wrong password', stored)).toBe(false);
     expect(await pbkdf2Verify('', stored)).toBe(false);

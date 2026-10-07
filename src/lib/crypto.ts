@@ -1,7 +1,7 @@
 /**
  * WebCrypto 工具(全部无外部依赖,Workers / Node 通用):
  * - sha256Hex:响应体 hash 短路(DECISIONS §4 硬要求)
- * - PBKDF2(210k iter)+ 常时比较:后台密码(design §9)
+ * - PBKDF2(100k iter,workerd 生产硬上限)+ 常时比较:后台密码(design §9)
  * - HMAC-SHA256:无状态 session cookie 签名(design §9)
  */
 const encoder = new TextEncoder();
@@ -66,10 +66,14 @@ async function pbkdf2Derive(password: string, salt: Uint8Array, iterations: numb
   return new Uint8Array(bits);
 }
 
-/** 生成 PBKDF2-SHA256 口令散布(design §9:210_000 iter / 16B salt) */
+/**
+ * 生成 PBKDF2-SHA256 口令散布。
+ * 迭代数必须是 workerd 生产环境上限 100_000:deriveBits 超过该值在生产直接抛
+ * NotSupportedError,而 wrangler dev 不执行此限制——本地能过、线上 500 的经典坑。
+ */
 export async function pbkdf2Hash(
   password: string,
-  iterations = 210_000,
+  iterations = 100_000,
   saltBytes = 16,
 ): Promise<Pbkdf2Stored> {
   const salt = crypto.getRandomValues(new Uint8Array(saltBytes));
