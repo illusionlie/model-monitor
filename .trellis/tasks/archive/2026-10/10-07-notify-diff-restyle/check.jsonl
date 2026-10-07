@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "测试清单与边界用例要求;核对降级阈值/时间格式/邮件结构断言是否达标"}
+{"file": ".trellis/spec/product/notifications.md", "reason": "核对实现与通知契约一致:TG 分段/节流未动、双 transport 未动、时间双标注保留"}
+{"file": ".trellis/spec/product/event-semantics.md", "reason": "核对事件语义与降级行为未被文案重构破坏"}
+{"file": ".trellis/spec/backend/index.md", "reason": "编码规范与生产环境注意点核查"}

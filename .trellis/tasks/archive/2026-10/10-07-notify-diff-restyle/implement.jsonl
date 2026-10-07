@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/product/notifications.md", "reason": "通知通道契约:TG HTML/分段/周报矩阵、email 双 transport 约定;文案与样式改动的唯一产品依据"}
+{"file": ".trellis/spec/product/event-semantics.md", "reason": "五类事件语义与降级阈值(DEGRADE_THRESHOLD=15)的定义来源,重构段落渲染不得改变事件过滤与降级行为"}
+{"file": ".trellis/spec/product/index.md", "reason": "产品契约入口:时间双标注等横切约束"}
+{"file": ".trellis/spec/backend/index.md", "reason": "编码规范入口与 workerd 生产环境坑;render.ts 属纯逻辑层,无 DB/subrequest 改动,但需遵守 TS strict 规范"}

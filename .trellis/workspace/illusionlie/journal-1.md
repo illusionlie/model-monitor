@@ -49,3 +49,24 @@
 
 [OK] **Completed**
 
+
+## Session 3: 通知文案 diff 风格重构 + 邮件内联样式修复
+
+**Date**: 2026-10-07
+**Task**: 10-07-notify-diff-restyle
+**Branch**: `main`
+
+### Summary
+
+用户反馈邮件"只收到纯文本",诊断出根因:EMAIL_STYLE(CSS 规则集)被塞进 <body style> 属性且含未转义双引号,样式从未生效——用户收到的实为无样式 HTML(自检证实)。顺手按用户需求重构全部通知文案为 git diff 风格:每源 diffstat 段头「源名 +A -D」+ 合并 diff 块(+/- 行首),邮件 GitHub diff 卡片(逐元素 inline style、bgcolor 双写),头部时间两行「北京时间 … / UTC时间 …」(lib/time.ts 新增 formatDualTimeLines)。trellis-implement/check 双子代理流,check 报 1 阻断(spec 未同步,主会话职责)+ 2 建议均已修复(shelfCounts 转义泄入 text 版、release_date 脏数据转义)。事实修正:邮件主力通道实为 Email Routing(免费/已验证目的地),Email Service Onboard Domain 需 Workers Paid——notifications.md / external-facts.md 已同步。typecheck 0 错、98 用例全绿(新增 20)。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| (本次) | feat: 通知文案 diff 风格重构 + 邮件内联样式修复 |
+| (本次) | chore: spec 修正(send_email 免费路径)+ 任务归档 |
+
+### Status
+
+[OK] **Completed**
