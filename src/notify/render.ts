@@ -1,11 +1,20 @@
 /**
- * 通知文案模板(design §7/§8;文案集中在此,其余层不得拼消息):
- * - 时间戳一律双标注「北京 … (UTC …)」(lib/time.ts)
- * - 模型列表用 <blockquote expandable>(TG);单源 added > 15 → 降级摘要 + 计数引导 /feed
+ * 通知文案模板(PRD 10-07-notify-diff-restyle:git diff 风格;文案集中在此,其余层不得拼消息):
+ * - 每源 diffstat 段头「源名 +A -D」(仅非零计数,added 在前)+ 一个合并 diff 块:
+ *   行首 `+`/`-` 即语义,不再输出「新增/下架」字样;added 在前、delisted 在后
+ * - 通知头部时间两行「北京时间 … / UTC时间 …」(lib/time.ts::formatDualTimeLines);
+ *   单行场景(周报「统计自 … 起」、测试通知)仍用 formatDualBeijingUtc
+ * - 降级:单源 added > DEGRADE_THRESHOLD(15)→ 仅列 DEGRADE_SHOW(3)个,
+ *   TG 块内末行「…其余 N 个,完整列表见 /feed」、邮件降级行「@@ 仅列前 3 个,共 N 个 · 完整列表见 /feed @@」;delisted 不降级
+ * - TG:HTML parse_mode;模型 id 用 <code>;列表 <blockquote expandable>;
+ *   系统消息行 ✅ 已接入(seed)/ ⚠️ 连续失败 / 🛩️ 已恢复
+ * - 邮件:GitHub diff 卡片风格,样式逐元素 inline——禁 <style> 块、style 属性值内禁双引号
+ *   (需要引号的字体名一律单引号);diff 行 bgcolor 属性与 style background-color 双写(Outlook 兼容);
+ *   系统消息条置于 diff 区之前、按源分组;text 版与 TG 同构([接入]/[失败]/[恢复] 前缀)
  * - 富字段(name/created/release_date/context_length,来自 events.payload 的 snapshot)适当展示
  * - 入参事件应已完成通道过滤(suppressed=1 的事件绝不该出现在这里)
  */
-import { formatDualBeijingUtc } from '../lib/time';
+import { formatDualBeijingUtc, formatDualTimeLines } from '../lib/time';
 import type { EventInsert } from '../db/events';
 
 /** 防刷屏阈值(spec:product/event-semantics.md):单源单轮 added 超过此数 → 降级 */
@@ -91,16 +100,18 @@ function fmtCtx(n: number): string {
   return `${n}`;
 }
 
-/** "openai/gpt-5 · GPT-5 · ctx 400k · 2025-08-07" → TG 用(已转义) */
+/** TG added 行内容(已转义):「<code>id</code> · 显示名 · ctx 400k · 2025-08-07」;无富字段则只有 code 部分 */
 function modelLineTg(modelId: string, payload: string | null): string {
   const facts = parseSnapshotFacts(payload);
-  const parts: string[] = [escapeHtml(modelId)];
+  const parts: string[] = [`<code>${escapeHtml(modelId)}</code>`];
   if (facts?.name && facts.name !== modelId) parts.push(escapeHtml(facts.name));
   if (facts?.contextLength) parts.push(`ctx ${fmtCtx(facts.contextLength)}`);
-  if (facts?.date) parts.push(facts.date);
+  // release_date 是上游原始字符串,不做格式校验,脏数据靠转义兜底
+  if (facts?.date) parts.push(escapeHtml(facts.date));
   return parts.join(' · ');
 }
 
+/** 纯文本行内容(TG 同构的 text 版):「id · 显示名 · ctx 400k · 2025-08-07」 */
 function modelLinePlain(modelId: string, payload: string | null): string {
   const facts = parseSnapshotFacts(payload);
   const parts: string[] = [modelId];
@@ -108,6 +119,12 @@ function modelLinePlain(modelId: string, payload: string | null): string {
   if (facts?.contextLength) parts.push(`ctx ${fmtCtx(facts.contextLength)}`);
   if (facts?.date) parts.push(facts.date);
   return parts.join(' · ');
+}
+
+/** 富字段部分(不含 id,纯文本):「显示名 · ctx 400k · 2025-08-07」;无 → '' */
+function richFieldsPlain(modelId: string, payload: string | null): string {
+  const parts = modelLinePlain(modelId, payload).split(' · ');
+  return parts.length > 1 ? parts.slice(1).join(' · ') : '';
 }
 
 function seedCount(e: EventInsert): number {
@@ -131,65 +148,64 @@ function failDetail(e: EventInsert): { consecutive: number; error: string } {
   }
 }
 
+// ---------- 共享:diffstat 与降级 ----------
+
+/** diffstat 计数片(仅非零,added 在前):['+2', '-1'] */
+function diffstatParts(added: number, delisted: number): string[] {
+  const parts: string[] = [];
+  if (added > 0) parts.push(`+${added}`);
+  if (delisted > 0) parts.push(`-${delisted}`);
+  return parts;
+}
+
+/** 单源 added 降级判定:超过阈值 → 只展示 DEGRADE_SHOW 个,rest = 未展示数 */
+function degradeInfo(addedCount: number): { degraded: boolean; rest: number } {
+  return addedCount > DEGRADE_THRESHOLD
+    ? { degraded: true, rest: addedCount - DEGRADE_SHOW }
+    : { degraded: false, rest: 0 };
+}
+
+/** 主题行 diffstat:非零计数;全零 → 「无新增/下架」;seed 另附「 · 新源 N」 */
+function diffSubject(prefix: string, added: number, delisted: number, seeded = 0): string {
+  const parts = diffstatParts(added, delisted);
+  const core = parts.length ? parts.join(' ') : '无新增/下架';
+  return seeded > 0 ? `${prefix}:${core} · 新源 ${seeded}` : `${prefix}:${core}`;
+}
+
 // ---------- TG HTML ----------
 
-function addedListTg(events: EventInsert[]): string[] {
-  if (!events.length) return [];
-  const name = escapeHtml(events[0].source_name);
-  if (events.length > DEGRADE_THRESHOLD) {
-    const shown = events.slice(0, DEGRADE_SHOW);
-    return [
-      `<b>【${name}】</b>新增 ${events.length} 个(较多,仅摘要):`,
-      '<blockquote expandable>',
-      ...shown.map((e) => `• ${modelLineTg(e.model_id ?? '', e.payload)}`),
-      `…其余 ${events.length - shown.length} 个,完整列表见 /feed`,
-      '</blockquote>',
-    ];
-  }
-  return [
-    `<b>【${name}】</b>新增 ${events.length} 个:`,
-    '<blockquote expandable>',
-    ...events.map((e) => `• ${modelLineTg(e.model_id ?? '', e.payload)}`),
-    '</blockquote>',
-  ];
-}
-
-function delistedListTg(events: EventInsert[]): string[] {
-  if (!events.length) return [];
-  const name = escapeHtml(events[0].source_name);
-  return [
-    `<b>【${name}】</b>下架 ${events.length} 个:`,
-    '<blockquote expandable>',
-    ...events.map((e) => `• ${escapeHtml(e.model_id ?? '')}`),
-    '</blockquote>',
-  ];
-}
-
 function sectionTg(sec: SourceSection): string[] {
+  const name = escapeHtml(sec.sourceName);
   const lines: string[] = [];
-  for (const e of sec.seed) {
-    lines.push(`✅ <b>【${escapeHtml(sec.sourceName)}】</b>已接入,存量 ${seedCount(e)} 个模型(静默 seed,不逐个通知)`);
-  }
+  for (const e of sec.seed)
+    lines.push(`✅ <b>${name}</b> 已接入 · 存量 ${seedCount(e)} 个模型(静默 seed)`);
   for (const e of sec.fail) {
     const d = failDetail(e);
-    lines.push(`⚠️ <b>【${escapeHtml(sec.sourceName)}】</b>连续 ${d.consecutive} 次探测失败:${escapeHtml(d.error)}`);
+    lines.push(`⚠️ <b>${name}</b> 连续 ${d.consecutive} 次探测失败 · ${escapeHtml(d.error)}`);
   }
-  for (const _e of sec.recovered) {
-    lines.push(`🛩️ <b>【${escapeHtml(sec.sourceName)}】</b>探测已恢复`);
+  for (const _e of sec.recovered) lines.push(`🛩️ <b>${name}</b> 探测已恢复`);
+  if (sec.added.length > 0 || sec.delisted.length > 0) {
+    const stats = diffstatParts(sec.added.length, sec.delisted.length).map((p) => `<b>${p}</b>`);
+    if (lines.length > 0) lines.push('');
+    lines.push(`<b>${name}</b> ${stats.join(' ')}`);
+    const { degraded, rest } = degradeInfo(sec.added.length);
+    const shown = degraded ? sec.added.slice(0, DEGRADE_SHOW) : sec.added;
+    const rows: string[] = shown.map((e) => `+ ${modelLineTg(e.model_id ?? '', e.payload)}`);
+    for (const e of sec.delisted) rows.push(`- <code>${escapeHtml(e.model_id ?? '')}</code>`);
+    if (degraded) rows.push(`…其余 ${rest} 个,完整列表见 /feed`);
+    lines.push('<blockquote expandable>', ...rows, '</blockquote>');
   }
-  lines.push(...addedListTg(sec.added));
-  lines.push(...delistedListTg(sec.delisted));
   return lines;
 }
 
 /** 本轮全部事件(已过滤)→ 一条 TG HTML 消息 */
 export function renderRoundTg(events: readonly EventInsert[], now: Date): string {
-  const body: string[] = [];
-  for (const sec of groupBySource(events)) body.push(...sectionTg(sec));
-  return ['📡 <b>模型监视 · 本轮变更</b>', formatDualBeijingUtc(now), '', ...body].join('\n');
+  const lines: string[] = ['📡 <b>模型监视 · 本轮变更</b>', formatDualTimeLines(now)];
+  for (const sec of groupBySource(events)) lines.push('', ...sectionTg(sec));
+  return lines.join('\n');
 }
 
-// ---------- Email HTML ----------
+// ---------- Email HTML(GitHub diff 卡片,全量 inline style) ----------
 
 export interface EmailMessage {
   subject: string;
@@ -197,58 +213,90 @@ export interface EmailMessage {
   text: string;
 }
 
-const EMAIL_STYLE =
-  'body{font-family:-apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;max-width:680px;margin:0 auto;padding:16px;color:#1a1a1a}h2{font-size:18px}h3{font-size:15px;margin:18px 0 6px}ul{margin:4px 0;padding-left:20px}li{margin:2px 0;font-size:13px}code{background:#f2f2f5;padding:1px 4px;border-radius:3px;font-size:12px}.muted{color:#777;font-size:12px}.badge{display:inline-block;padding:0 6px;border-radius:8px;font-size:12px;color:#fff}.add{background:#0a7d32}.del{background:#b3261e}.warn{background:#b3691e}';
+/** inline 样式常量(PRD R3:style 值内禁双引号,需要引号的字体名一律单引号) */
+const EMAIL_MONO_FONT = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+const EMAIL_SANS_FONT = "-apple-system,system-ui,'PingFang SC','Microsoft YaHei',sans-serif";
+const EMAIL_TIME_STYLE = 'color:#57606a;font-size:12px;margin:0 0 16px';
+const EMAIL_BAR_STYLE =
+  'margin:8px 0;padding:8px 12px;background-color:#ddf4ff;border-left:4px solid #0969da;border-radius:4px;font-size:13px';
+const EMAIL_FILEHEAD_STYLE =
+  'margin:16px 0 0;padding:6px 12px;background-color:#eff2f5;border-radius:6px 6px 0 0;font-size:13px';
+const EMAIL_ROW_STYLE = `margin:0;padding:3px 12px;font-family:${EMAIL_MONO_FONT};font-size:12px`;
 
-function li(modelId: string, payload: string | null, badge: string, label: string): string {
-  const facts = parseSnapshotFacts(payload);
-  const extra = facts ? ` <span class="muted">(${escapeHtml(modelLinePlain(modelId, payload).split(' · ').slice(1).join(' · '))})</span>` : '';
-  return `<li><code>${escapeHtml(modelId)}</code> <span class="badge ${badge}">${label}</span>${extra}</li>`;
+/** 邮件外壳:页面底色 div(bgcolor 双写)+ 白卡片 + 标题 + 两行时间(<br> 换行);extraLine 为周报「统计自 … 起」 */
+function emailShell(title: string, now: Date, extraLine?: string): string {
+  const time = formatDualTimeLines(now)
+    .split('\n')
+    .join('<br>');
+  return (
+    '<!doctype html><html><body>' +
+    `<div bgcolor="#f6f8fa" style="background-color:#f6f8fa;padding:16px">` +
+    `<div style="max-width:680px;margin:0 auto;background-color:#ffffff;border:1px solid #d0d7de;border-radius:8px;padding:20px;font-family:${EMAIL_SANS_FONT};color:#1f2328">` +
+    `<h2 style="font-size:18px;margin:0 0 8px">${title}</h2>` +
+    `<p style="${EMAIL_TIME_STYLE}">${time}${extraLine ? `<br>${extraLine}` : ''}</p>`
+  );
 }
 
-function sectionEmail(sec: SourceSection): { html: string; text: string } {
-  const html: string[] = [];
-  const text: string[] = [];
+/** 系统消息条(seed/fail/recovered),diff 区之前按源分组输出 */
+function systemBarHtml(emoji: string, name: string, body: string): string {
+  return `<p style="${EMAIL_BAR_STYLE}">${emoji} <strong>${name}</strong> ${body}</p>`;
+}
+
+/** 单源 → 系统条(bars)+ diff 块(diff)+ text 版行(text) */
+function sectionEmail(sec: SourceSection): { bars: string[]; diff: string[]; text: string[] } {
   const name = escapeHtml(sec.sourceName);
-  for (const e of sec.seed) text.push(`[接入] ${sec.sourceName}:存量 ${seedCount(e)} 个模型(静默 seed)`);
-  for (const e of sec.seed)
-    html.push(`<h3>${name} 已接入</h3><p>存量 <strong>${seedCount(e)}</strong> 个模型(静默 seed,不逐个通知)。</p>`);
+  const bars: string[] = [];
+  const diff: string[] = [];
+  const text: string[] = [];
+  for (const e of sec.seed) {
+    bars.push(systemBarHtml('✅', name, `已接入 · 存量 ${seedCount(e)} 个模型(静默 seed)`));
+    text.push(`[接入] ${sec.sourceName}:存量 ${seedCount(e)} 个模型(静默 seed)`);
+  }
   for (const e of sec.fail) {
     const d = failDetail(e);
-    text.push(`[失败] ${sec.sourceName}:连续 ${d.consecutive} 次探测失败 ${d.error}`);
-    html.push(
-      `<h3>⚠️ ${name} 连续 ${d.consecutive} 次探测失败</h3><p class="muted">${escapeHtml(d.error)}</p>`,
-    );
+    bars.push(systemBarHtml('⚠️', name, `连续 ${d.consecutive} 次探测失败 · ${escapeHtml(d.error)}`));
+    text.push(`[失败] ${sec.sourceName}:连续 ${d.consecutive} 次探测失败 · ${d.error}`);
   }
   for (const _e of sec.recovered) {
+    bars.push(systemBarHtml('🛩️', name, '探测已恢复'));
     text.push(`[恢复] ${sec.sourceName}:探测已恢复`);
-    html.push(`<h3>🛩️ ${name} 探测已恢复</h3>`);
   }
-  if (sec.added.length) {
-    const shown =
-      sec.added.length > DEGRADE_THRESHOLD ? sec.added.slice(0, DEGRADE_SHOW) : sec.added;
-    const restNote =
-      sec.added.length > DEGRADE_THRESHOLD
-        ? `<p class="muted">共 ${sec.added.length} 个,仅列前 ${DEGRADE_SHOW} 个,完整列表见 /feed。</p>`
-        : '';
-    html.push(
-      `<h3>${name} · 新增 ${sec.added.length}</h3><ul>${shown
-        .map((e) => li(e.model_id ?? '', e.payload, 'add', '新增'))
-        .join('')}</ul>${restNote}`,
-    );
-    text.push(`[新增 ${sec.added.length}] ${sec.sourceName}: ${shown.map((e) => modelLinePlain(e.model_id ?? '', e.payload)).join('; ')}${restNote ? `(共 ${sec.added.length} 个)` : ''}`);
+  if (sec.added.length > 0 || sec.delisted.length > 0) {
+    const stats = diffstatParts(sec.added.length, sec.delisted.length)
+      .map((p) => (p.startsWith('+')
+        ? `<span style="color:#1a7f37;font-weight:600">${p}</span>`
+        : `<span style="color:#cf222e;font-weight:600">${p}</span>`))
+      .join(' ');
+    diff.push(`<p style="${EMAIL_FILEHEAD_STYLE}"><strong>${name}</strong> ${stats}</p>`);
+    const { degraded } = degradeInfo(sec.added.length);
+    const shown = degraded ? sec.added.slice(0, DEGRADE_SHOW) : sec.added;
+    const rows: string[] = [];
+    for (const e of shown) {
+      const id = e.model_id ?? '';
+      const rich = richFieldsPlain(id, e.payload);
+      rows.push(
+        `<p bgcolor="#e6ffec" style="${EMAIL_ROW_STYLE};background-color:#e6ffec;color:#1a7f37">+ ${escapeHtml(id)}${rich ? ` <span style="opacity:0.75">· ${escapeHtml(rich)}</span>` : ''}</p>`,
+      );
+    }
+    for (const e of sec.delisted) {
+      rows.push(
+        `<p bgcolor="#ffebe9" style="${EMAIL_ROW_STYLE};background-color:#ffebe9;color:#cf222e">- ${escapeHtml(e.model_id ?? '')}</p>`,
+      );
+    }
+    if (degraded)
+      rows.push(
+        `<p bgcolor="#f2f5f8" style="${EMAIL_ROW_STYLE};background-color:#f2f5f8;color:#59636e">@@ 仅列前 ${DEGRADE_SHOW} 个,共 ${sec.added.length} 个 · 完整列表见 /feed @@</p>`,
+      );
+    diff.push(`<div style="border-radius:0 0 6px 6px;overflow:hidden">${rows.join('')}</div>`);
+    // text 版与 TG 同构(系统行与 diff 区之间空一行)
+    if (text.length > 0) text.push('');
+    text.push(`${sec.sourceName} ${diffstatParts(sec.added.length, sec.delisted.length).join(' ')}`);
+    for (const e of shown) text.push(`+ ${modelLinePlain(e.model_id ?? '', e.payload)}`);
+    for (const e of sec.delisted) text.push(`- ${e.model_id ?? ''}`);
+    if (degraded)
+      text.push(`@@ 仅列前 ${DEGRADE_SHOW} 个,共 ${sec.added.length} 个 · 完整列表见 /feed @@`);
   }
-  if (sec.delisted.length) {
-    html.push(
-      `<h3>${name} · 下架 ${sec.delisted.length}</h3><ul>${sec.delisted
-        .map((e) => li(e.model_id ?? '', e.payload, 'del', '下架'))
-        .join('')}</ul>`,
-    );
-    text.push(
-      `[下架 ${sec.delisted.length}] ${sec.sourceName}: ${sec.delisted.map((e) => e.model_id).join('; ')}`,
-    );
-  }
-  return { html: html.join('\n'), text: text.join('\n') };
+  return { bars, diff, text };
 }
 
 /** 本轮全部事件(已过滤)→ 一封邮件(subject/html/text) */
@@ -256,17 +304,19 @@ export function renderRoundEmail(events: readonly EventInsert[], now: Date): Ema
   const added = events.filter((e) => e.kind === 'added').length;
   const delisted = events.filter((e) => e.kind === 'delisted').length;
   const seeded = events.filter((e) => e.kind === 'seed').length;
-  const parts: string[] = [];
+  const bars: string[] = [];
+  const diffs: string[] = [];
   const texts: string[] = [];
   for (const sec of groupBySource(events)) {
     const r = sectionEmail(sec);
-    parts.push(r.html);
-    texts.push(r.text);
+    bars.push(...r.bars);
+    diffs.push(...r.diff);
+    texts.push('', ...r.text);
   }
-  const ts = formatDualBeijingUtc(now);
-  const subject = `📡 模型监视:新增 ${added} · 下架 ${delisted}${seeded ? ` · 新源接入 ${seeded}` : ''}`;
-  const html = `<!doctype html><html><body style="${EMAIL_STYLE}"><h2>📡 模型监视 · 本轮变更</h2><p class="muted">${ts}</p>${parts.join('\n')}</body></html>`;
-  const text = [`模型监视 · 本轮变更`, ts, '', ...texts].join('\n');
+  const subject = diffSubject('📡 模型监视', added, delisted, seeded);
+  const html =
+    emailShell('📡 模型监视 · 本轮变更', now) + bars.join('') + diffs.join('') + '</div></div></body></html>';
+  const text = ['模型监视 · 本轮变更', formatDualTimeLines(now), ...texts].join('\n');
   return { subject, html, text };
 }
 
@@ -287,46 +337,68 @@ export interface WeeklyData {
   sourceNames: ReadonlyMap<number, string>;
 }
 
+/** 周报「当前在架」串(原文,「源名 N · 源名 M」):TG/HTML 侧在调用处转义,text 版直接用 */
+function shelfCountsText(data: WeeklyData): string {
+  return [...data.modelCounts.entries()]
+    .map(([id, n]) => `${data.sourceNames.get(id) ?? `#${id}`} ${n}`)
+    .join(' · ');
+}
+
 export function renderWeeklyTg(data: WeeklyData, now: Date): string {
   const lines: string[] = [
     `📊 <b>模型监视 · 周报 ${escapeHtml(data.weekId)}</b>`,
-    formatDualBeijingUtc(now),
-    `统计:${escapeHtml(formatDualBeijingUtc(data.fromIso))} 起`,
+    formatDualTimeLines(now),
+    `统计自 ${escapeHtml(formatDualBeijingUtc(data.fromIso))} 起`,
     '',
     `本周:新增 ${data.addedCount} · 下架 ${data.delistedCount} · 失败告警 ${data.failCount} · 新源接入 ${data.seedCount}`,
   ];
   if (data.sections.length === 0) lines.push('', '本周无新增/下架事件,一切平静 🌿');
   for (const sec of data.sections) lines.push('', ...sectionTg(sec));
-  const counts = [...data.modelCounts.entries()]
-    .map(([id, n]) => `${escapeHtml(data.sourceNames.get(id) ?? `#${id}`)} ${n}`)
-    .join(' · ');
-  if (counts) lines.push('', `当前在架:${counts}`);
+  const counts = shelfCountsText(data);
+  if (counts) lines.push('', `当前在架:${escapeHtml(counts)}`);
   return lines.join('\n');
 }
 
 export function renderWeeklyEmail(data: WeeklyData, now: Date): EmailMessage {
-  const parts: string[] = [];
+  const bars: string[] = [];
+  const diffs: string[] = [];
   const texts: string[] = [];
   for (const sec of data.sections) {
     const r = sectionEmail(sec);
-    parts.push(r.html);
-    texts.push(r.text);
+    bars.push(...r.bars);
+    diffs.push(...r.diff);
+    texts.push('', ...r.text);
   }
-  const ts = formatDualBeijingUtc(now);
-  const subject = `📊 模型监视周报 ${data.weekId}:新增 ${data.addedCount} · 下架 ${data.delistedCount}`;
-  const rows = [...data.modelCounts.entries()]
+  const subject = diffSubject(`📊 模型监视周报 ${data.weekId}`, data.addedCount, data.delistedCount);
+  const statsHtml = `<p style="font-size:13px">本周:新增 <strong>${data.addedCount}</strong> · 下架 <strong>${data.delistedCount}</strong> · 失败告警 ${data.failCount} · 新源接入 ${data.seedCount}</p>`;
+  const shelfRows = [...data.modelCounts.entries()]
     .map(
       ([id, n]) =>
-        `<li>${escapeHtml(data.sourceNames.get(id) ?? `#${id}`)}:<strong>${n}</strong> 个在架</li>`,
+        `<li style="margin:2px 0">${escapeHtml(data.sourceNames.get(id) ?? `#${id}`)}:<strong>${n}</strong> 个在架</li>`,
     )
     .join('');
-  const html = `<!doctype html><html><body style="${EMAIL_STYLE}"><h2>📊 模型监视 · 周报 ${escapeHtml(data.weekId)}</h2><p class="muted">${ts}(统计自 ${escapeHtml(formatDualBeijingUtc(data.fromIso))})</p><p>本周:新增 <strong>${data.addedCount}</strong> · 下架 <strong>${data.delistedCount}</strong> · 失败告警 ${data.failCount} · 新源接入 ${data.seedCount}</p>${parts.join('\n') || '<p>本周无新增/下架事件,一切平静 🌿</p>'}${rows ? `<h3>当前在架</h3><ul>${rows}</ul>` : ''}</body></html>`;
-  const text = [
+  const shelfHtml = shelfRows
+    ? `<p style="margin:16px 0 0;padding:6px 12px;background-color:#eff2f5;border-radius:6px;font-size:13px"><strong>当前在架</strong></p><ul style="margin:0;padding:6px 0 6px 28px;font-size:13px">${shelfRows}</ul>`
+    : '';
+  const html =
+    emailShell(
+      `📊 模型监视 · 周报 ${escapeHtml(data.weekId)}`,
+      now,
+      `统计自 ${escapeHtml(formatDualBeijingUtc(data.fromIso))} 起`,
+    ) +
+    statsHtml +
+    (bars.join('') + diffs.join('') || '<p>本周无新增/下架事件,一切平静 🌿</p>') +
+    shelfHtml +
+    '</div></div></body></html>';
+  const textLines = [
     `模型监视周报 ${data.weekId}`,
-    `${ts}(统计自 ${formatDualBeijingUtc(data.fromIso)})`,
+    formatDualTimeLines(now),
+    `统计自 ${formatDualBeijingUtc(data.fromIso)} 起`,
     `本周:新增 ${data.addedCount} · 下架 ${data.delistedCount} · 失败告警 ${data.failCount} · 新源接入 ${data.seedCount}`,
-    '',
     ...texts,
-  ].join('\n');
-  return { subject, html, text };
+  ];
+  if (data.sections.length === 0) textLines.push('', '本周无新增/下架事件,一切平静 🌿');
+  const counts = shelfCountsText(data);
+  if (counts) textLines.push('', `当前在架:${counts}`);
+  return { subject, html, text: textLines.join('\n') };
 }

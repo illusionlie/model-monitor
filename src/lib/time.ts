@@ -51,11 +51,20 @@ function beijingWallClock(date: Date): WallClock {
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 
-/** 通知消息时间戳双标注:北京 2026-10-06 21:00 (UTC 13:00) */
+/** 通知消息时间戳双标注(单行场景):北京 2026-10-06 21:00 (UTC 13:00) */
 export function formatDualBeijingUtc(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   const wc = beijingWallClock(d);
   return `北京 ${wc.year}-${pad2(wc.month)}-${pad2(wc.day)} ${pad2(wc.hour)}:${pad2(wc.minute)} (UTC ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())})`;
+}
+
+/** 通知头部两行时间(PRD 10-07-notify-diff-restyle R1):「北京时间 …\nUTC时间 …」,两行均带完整日期 */
+export function formatDualTimeLines(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const wc = beijingWallClock(d);
+  const beijing = `${wc.year}-${pad2(wc.month)}-${pad2(wc.day)} ${pad2(wc.hour)}:${pad2(wc.minute)}`;
+  const utc = `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+  return `北京时间 ${beijing}\nUTC时间 ${utc}`;
 }
 
 /** ISO 周标识(周一为一周开始),如 `2026-W41`。输入是「naive UTC 毫秒」帧内的时间。 */

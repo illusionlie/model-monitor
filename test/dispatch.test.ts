@@ -77,20 +77,21 @@ describe('render:降级与文案语义(spec:product/event-semantics.md / schedul
   it(`单源 added > ${DEGRADE_THRESHOLD} → 降级摘要 + 计数引导 /feed`, () => {
     const n = DEGRADE_THRESHOLD + 1;
     const html = renderRoundTg(mkAdded(n), NOW);
-    expect(html).toContain(`新增 ${n} 个(较多,仅摘要)`);
-    expect(html).toContain('完整列表见 /feed');
+    expect(html).toContain(`…其余 ${n - 3} 个,完整列表见 /feed`);
     expect(html).not.toContain(`openai/m-3`); // 只内联前 3 个
     // 邮件同样降级
     const email = renderRoundEmail(mkAdded(n), NOW);
-    expect(email.html).toContain(`仅列前 3 个`);
-    expect(email.subject).toBe(`📡 模型监视:新增 ${n} · 下架 0`);
+    expect(email.html).toContain(`@@ 仅列前 3 个,共 ${n} 个 · 完整列表见 /feed @@`);
+    expect(email.subject).toBe(`📡 模型监视:+${n}`);
   });
 
-  it('时间戳双标注:北京 + UTC(spec:product/scheduling.md)', () => {
+  it('时间戳双标注:北京 + UTC 两行(spec:product/scheduling.md)', () => {
     const html = renderRoundTg(mkAdded(1), NOW);
-    expect(html).toContain('北京 2026-10-09 21:00 (UTC 13:00)');
+    expect(html).toContain('北京时间 2026-10-09 21:00');
+    expect(html).toContain('UTC时间 2026-10-09 13:00');
     const email = renderRoundEmail(mkAdded(1), NOW);
-    expect(email.text).toContain('北京 2026-10-09 21:00 (UTC 13:00)');
+    expect(email.text).toContain('北京时间 2026-10-09 21:00');
+    expect(email.text).toContain('UTC时间 2026-10-09 13:00');
   });
 
   it('模型 id / 源名 HTML 转义(TG parse_mode 安全)', () => {
@@ -99,13 +100,13 @@ describe('render:降级与文案语义(spec:product/event-semantics.md / schedul
       NOW,
     );
     expect(html).toContain('x/y&lt;zoom&gt;&amp;me');
-    expect(html).toContain('【A&lt;b&gt;&amp;Co】');
+    expect(html).toContain('<b>A&lt;b&gt;&amp;Co</b>');
     expect(html).not.toContain('x/y<zoom>');
   });
 
-  it('seed 事件 → 「已接入,存量 N」确认消息(静默 seed,spec:product/event-semantics.md)', () => {
+  it('seed 事件 → 「已接入 · 存量 N」确认消息(静默 seed,spec:product/event-semantics.md)', () => {
     const html = renderRoundTg([ev({ kind: 'seed', model_id: null, payload: '{"count":464}' })], NOW);
-    expect(html).toContain('已接入,存量 464 个模型');
+    expect(html).toContain('已接入 · 存量 464 个模型');
   });
 
   it('失败告警文案带连续次数', () => {
