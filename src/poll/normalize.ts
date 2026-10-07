@@ -1,7 +1,8 @@
 /**
  * 三类源响应 → NormalizedModel[](design §2 / implement.md A-6):
  * - 目录源(结构自适配):`{data:[{id,...}]}` 列表式(OpenRouter);
- *   `{provider → {models:{slug → 字段}}}` 字典式(models.dev,id=`{provider}/{slug}` 若无前缀)
+ *   字典式按条目分派——`{provider → {models:{slug → 字段}}}` 二层(models.dev /api.json,id=`{provider}/{slug}` 若无前缀)
+ *   或 `{lab/model → 富字段}` 扁平(models.dev /models.json,id=键,provider=首个 `/` 前缀)
  * - 渠道源:`{data:[{id,...}]}`,只认 id(created 不可信,spec:product/data-sources.md)
  * 判定永远只看 id 集合;富字段只进 snapshot 供展示。
  */
@@ -63,24 +64,43 @@ function normalizeListCatalog(json: unknown): NormalizedModel[] {
   return out;
 }
 
-/** models.dev 式字典:`{provider: {models: {slug: {...}}}}` → 扁平化,无前缀 slug 补 `{provider}/` */
-function normalizeProviderDict(json: unknown): NormalizedModel[] {
+/**
+ * 字典式目录,按条目分派:
+ * - 二层(/api.json):值为 record 且含 record `.models` → `{provider → {models:{slug → 字段}}}`,
+ *   扁平化后无前缀 slug 补 `{provider}/`(旧行为,不回退)
+ * - 扁平(/models.json):键含 `/` 且值为 record(无 `.models`)→ id=键,provider=首个 `/` 的前缀,
+ *   snapshot 挑 name/release_date。provider 名不含 `/`,二层字典键天然不会误判为扁平条目
+ * - 其余条目(键不含 `/`、值非 record)跳过
+ */
+function normalizeDictCatalog(json: unknown): NormalizedModel[] {
   if (!isRecord(json)) throw new ResponseParseError('目录响应不是对象');
   const out: NormalizedModel[] = [];
   const seen = new Set<string>();
-  for (const [provider, info] of Object.entries(json)) {
-    if (!isRecord(info) || !isRecord(info.models)) continue;
-    for (const [slug, detail] of Object.entries(info.models)) {
-      if (!slug) continue;
-      const id = slug.includes('/') ? slug : `${provider}/${slug}`;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      out.push({
-        id,
-        provider,
-        snapshot: isRecord(detail) ? pickSnapshot(detail, ['name', 'release_date']) : null,
-      });
+  for (const [key, value] of Object.entries(json)) {
+    if (!isRecord(value)) continue;
+    if (isRecord(value.models)) {
+      for (const [slug, detail] of Object.entries(value.models)) {
+        if (!slug) continue;
+        const id = slug.includes('/') ? slug : `${key}/${slug}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push({
+          id,
+          provider: key,
+          snapshot: isRecord(detail) ? pickSnapshot(detail, ['name', 'release_date']) : null,
+        });
+      }
+      continue;
     }
+    if (!key.includes('/')) continue; // 无 '/' 的键(provider 名形态)不是模型条目
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const slash = key.indexOf('/');
+    out.push({
+      id: key,
+      provider: slash > 0 ? key.slice(0, slash) : null,
+      snapshot: pickSnapshot(value, ['name', 'release_date']),
+    });
   }
   return out;
 }
@@ -104,9 +124,9 @@ function normalizeChannel(json: unknown): NormalizedModel[] {
 export function normalizeResponse(kind: SourceKind, text: string): NormalizedModel[] {
   const json = parseJson(text);
   if (kind === 'channel') return normalizeChannel(json);
-  // 目录源结构自适配:data 数组(OpenRouter)或 provider 字典(models.dev)
+  // 目录源结构自适配:data 数组(OpenRouter)、二层字典(/api.json)或扁平字典(/models.json)
   if (isRecord(json) && Array.isArray(json.data)) return normalizeListCatalog(json);
-  return normalizeProviderDict(json);
+  return normalizeDictCatalog(json);
 }
 
 /** allowlist(provider 白名单)仅作用于目录源;空 = 全量(含 trim 后全为空白的情况,spec:product/data-sources.md) */

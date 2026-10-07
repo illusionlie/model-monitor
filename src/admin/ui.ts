@@ -199,7 +199,7 @@ export function renderAdminPage(): string {
       <div><label>API Key(可选)</label><input type="password" id="srcKey" autocomplete="off"></div>
     </div>
     <div class="btnrow" style="margin-top:8px"><button type="submit">添加渠道源</button></div>
-    <p class="muted">内置目录源(OpenRouter / models.dev)不可删除,只可启停。新源首轮静默 seed:仅发一条接入确认。</p>
+    <p class="muted">内置目录源(OpenRouter / models.dev)不可删除,只可启停。新源首轮静默 seed:仅发一条接入确认。「清理模型」可清空某源存量并复位为静默接入状态(源配置与事件记录保留)。</p>
   </form>
 </div>
 
@@ -262,6 +262,10 @@ function renderSources(){
     var tg=el('button',null,src.enabled?'停用':'启用');
     tg.addEventListener('click',function(){toggleSource(src);});
     op.appendChild(tg);
+    op.appendChild(document.createTextNode(' '));
+    var rst=el('button',null,'清理模型');
+    rst.addEventListener('click',function(){resetSource(src);});
+    op.appendChild(rst);
     if(src.kind==='channel'){op.appendChild(document.createTextNode(' '));
       var del=el('button','danger','删除');
       del.addEventListener('click',function(){delSource(src);});
@@ -300,6 +304,11 @@ async function delSource(src){
   if(!confirm('确认删除渠道源「'+src.name+'」?其模型与事件记录将一并删除。'))return;
   try{await api('/admin/api/sources/'+src.id,'DELETE');await loadState();}
   catch(e){alert('删除失败:'+e.message);}
+}
+async function resetSource(src){
+  if(!confirm('清理「'+src.name+'」的已存模型?下轮探测将按新源静默重新接入(仅一条确认通知)。'))return;
+  try{await api('/admin/api/sources/'+src.id+'/reset','POST');await loadState();}
+  catch(e){alert('清理失败:'+e.message);}
 }
 $('logout').addEventListener('click',async function(){try{await api('/admin/logout','POST');}catch(e){}location.href='/admin';});
 $('run').addEventListener('click',async function(){

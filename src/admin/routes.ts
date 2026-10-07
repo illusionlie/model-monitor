@@ -17,6 +17,7 @@ import {
   getSource,
   listAllSources,
   markCatalogsRebaseline,
+  resetSourceModels,
   setSourceEnabled,
 } from '../db/sources';
 import { countModelsBySource } from '../db/models';
@@ -288,6 +289,17 @@ export function registerRoutes(app: Hono<{ Bindings: Env }>): void {
     const src = await getSource(c.env.DB, id);
     if (!src) return c.json({ error: 'not_found' }, 404);
     await setSourceEnabled(c.env.DB, id, body.enabled, nowIso());
+    return c.json({ ok: true });
+  });
+
+  // 清理源存量模型(渠道与目录源均可):下轮探测按新源静默 seed(仅一条接入确认)
+  app.post('/admin/api/sources/:id/reset', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'bad_id' }, 400);
+    const src = await getSource(c.env.DB, id);
+    if (!src) return c.json({ error: 'not_found' }, 404);
+    await resetSourceModels(c.env.DB, id, nowIso());
+    console.log(`[admin] 清理源 ${src.name}(id=${id})存量模型 → 下轮静默 seed`);
     return c.json({ ok: true });
   });
 

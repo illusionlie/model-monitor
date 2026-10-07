@@ -109,6 +109,18 @@ export async function deleteChannelSource(db: D1Database, id: number): Promise<v
   await db.prepare(`DELETE FROM sources WHERE id = ? AND kind = 'channel'`).bind(id).run();
 }
 
+/**
+ * 清理源存量模型(渠道与目录源均可用):删该源全部 models 行,并复位 seed 状态
+ * (seed_done=0 / last_hash=NULL / rebaseline=0)→ 下轮探测按新源路径静默 seed,仅一条接入确认事件。
+ * 非破坏性:源配置(base_url/key/启停)与 events 审计记录均不动。
+ */
+export async function resetSourceModels(db: D1Database, id: number, nowIso: string): Promise<void> {
+  await db.batch([
+    db.prepare('DELETE FROM models WHERE source_id = ?').bind(id),
+    db.prepare('UPDATE sources SET seed_done = 0, last_hash = NULL, rebaseline = 0, updated_at = ? WHERE id = ?').bind(nowIso, id),
+  ]);
+}
+
 /** 启停源(内置目录源只可启停不可删,spec:product/admin-and-feed.md) */
 export async function setSourceEnabled(
   db: D1Database,
