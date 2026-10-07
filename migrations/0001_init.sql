@@ -1,4 +1,4 @@
--- model-monitor v1 初始 schema(design §3,DECISIONS §4:D1-only,无 KV)
+-- model-monitor v1 初始 schema(spec:product/storage.md:D1-only,无 KV)
 -- 时间戳一律 UTC ISO 字符串;models 行只在状态变化时写(严禁每轮全量 upsert)
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_time ON events(detected_at DESC);
 CREATE INDEX IF NOT EXISTS idx_events_dedup ON events(dedup_group, kind, model_id);
 
--- 内置全局目录源 ×2(DECISIONS §2):首跑即静默 seed(§12-3 验收)
+-- 内置全局目录源 ×2(spec:product/data-sources.md):首跑即静默 seed(spec:product/acceptance.md 第 3 条验收)
 INSERT INTO sources (kind, name, base_url, api_key, enabled, seed_done, created_at, updated_at)
 VALUES
   ('catalog', 'OpenRouter', 'https://openrouter.ai/api/v1/models', NULL, 1, 0,

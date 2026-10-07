@@ -129,7 +129,7 @@ describe('normalizeResponse:异常输入', () => {
   });
 });
 
-describe('applyAllowlist(仅目录源;空 = 全量,DECISIONS §2)', () => {
+describe('applyAllowlist(仅目录源;空 = 全量,spec:product/data-sources.md)', () => {
   const models: NormalizedModel[] = [
     { id: 'openai/gpt-4o', provider: 'openai', snapshot: null },
     { id: 'google/gemini-2.0-flash', provider: 'Google', snapshot: null }, // 大小写不敏感

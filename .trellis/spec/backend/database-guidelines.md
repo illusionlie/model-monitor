@@ -9,7 +9,7 @@
 
 - Single D1 database, binding `DB`, accessed only through `src/db/*.ts` modules (`settings.ts`, `sources.ts`, `models.ts`, `events.ts`). Routes/engine never inline SQL.
 - All timestamps stored as **UTC ISO strings**. Display formatting (Beijing + UTC dual annotation) happens only in `src/lib/time.ts` / `src/notify/render.ts`.
-- Business secrets (TG token, Resend key, recipients, admin password hash, feed secret) live in the `settings` k-v table — **never** in env vars, wrangler.toml, or GitHub secrets (DECISIONS §5).
+- Business secrets (TG token, Resend key, recipients, admin password hash, feed secret) live in the `settings` k-v table — **never** in env vars, wrangler.toml, or GitHub secrets (spec:product/notifications.md).
 
 ## Query Patterns
 

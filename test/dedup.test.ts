@@ -17,7 +17,7 @@ const ev = (over: Partial<EventInsert>): EventInsert => ({
   ...over,
 });
 
-describe('全局目录组去重(DECISIONS §1/§6)', () => {
+describe('全局目录组去重(spec:product/event-semantics.md)', () => {
   it('catalog 组内 added 且历史已报过同 model_id → suppressed=1(入库但完全静默)', () => {
     const events = [ev({ model_id: 'openai/gpt-x' }), ev({ model_id: 'anthropic/claude-y' })];
     const n = applyCatalogDedup(events, new Set(['openai/gpt-x']));

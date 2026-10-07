@@ -18,7 +18,7 @@ const ev = (over: Partial<EventInsert>): EventInsert => ({
   ...over,
 });
 
-describe('通道矩阵:事件可见性(DECISIONS §5)', () => {
+describe('通道矩阵:事件可见性(spec:product/notifications.md)', () => {
   it('默认开关(缺省 = 开):added/delisted 双通道均可见', () => {
     for (const kind of ['added', 'delisted'] as EventKind[]) {
       const e = ev({ kind });
@@ -41,13 +41,13 @@ describe('通道矩阵:事件可见性(DECISIONS §5)', () => {
     expect(eligibleForTelegram(ev({ kind: 'added' }), s)).toBe(true);
   });
 
-  it('suppressed=1(目录组去重命中)→ 一律不可见(完全静默,DECISIONS §1)', () => {
+  it('suppressed=1(目录组去重命中)→ 一律不可见(完全静默,spec:product/event-semantics.md)', () => {
     const e = ev({ suppressed: 1 });
     expect(eligibleForTelegram(e, {})).toBe(false);
     expect(eligibleForEmail(e, {})).toBe(false);
   });
 
-  it('source_fail(连续失败告警)只走 TG 实时,邮件不发(DECISIONS §5)', () => {
+  it('source_fail(连续失败告警)只走 TG 实时,邮件不发(spec:product/notifications.md)', () => {
     const e = ev({ kind: 'source_fail', model_id: null });
     expect(eligibleForTelegram(e, {})).toBe(true);
     expect(eligibleForEmail(e, {})).toBe(false);
@@ -63,7 +63,7 @@ describe('通道矩阵:事件可见性(DECISIONS §5)', () => {
   });
 });
 
-describe('render:降级与文案语义(DECISIONS §1 / §3)', () => {
+describe('render:降级与文案语义(spec:product/event-semantics.md / scheduling.md)', () => {
   const mkAdded = (n: number): EventInsert[] =>
     Array.from({ length: n }, (_, i) => ev({ model_id: `openai/m-${i}` }));
 
@@ -86,7 +86,7 @@ describe('render:降级与文案语义(DECISIONS §1 / §3)', () => {
     expect(email.subject).toBe(`📡 模型监视:新增 ${n} · 下架 0`);
   });
 
-  it('时间戳双标注:北京 + UTC(DECISIONS §3)', () => {
+  it('时间戳双标注:北京 + UTC(spec:product/scheduling.md)', () => {
     const html = renderRoundTg(mkAdded(1), NOW);
     expect(html).toContain('北京 2026-10-09 21:00 (UTC 13:00)');
     const email = renderRoundEmail(mkAdded(1), NOW);
@@ -103,7 +103,7 @@ describe('render:降级与文案语义(DECISIONS §1 / §3)', () => {
     expect(html).not.toContain('x/y<zoom>');
   });
 
-  it('seed 事件 → 「已接入,存量 N」确认消息(静默 seed,DECISIONS §1)', () => {
+  it('seed 事件 → 「已接入,存量 N」确认消息(静默 seed,spec:product/event-semantics.md)', () => {
     const html = renderRoundTg([ev({ kind: 'seed', model_id: null, payload: '{"count":464}' })], NOW);
     expect(html).toContain('已接入,存量 464 个模型');
   });

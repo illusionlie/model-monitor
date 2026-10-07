@@ -1,9 +1,9 @@
 /**
  * Worker 绑定类型(design §1/§3)。
- * 业务 secrets 一律存 D1 settings(DECISIONS §5);env 与 GitHub secrets 只放部署凭据。
+ * 业务 secrets 一律存 D1 settings(spec:product/notifications.md);env 与 GitHub secrets 只放部署凭据。
  */
 
-/** send_email binding:构造发件用结构化对象(DECISIONS §5,不用 PostalMime) */
+/** send_email binding:构造发件用结构化对象(spec:product/notifications.md,不用 PostalMime) */
 export interface SendEmailMessage {
   to: string | string[];
   from: string;

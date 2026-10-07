@@ -43,7 +43,7 @@ export function parseBool(v: string | undefined, fallback = false): boolean {
   return v === 'true' || v === '1';
 }
 
-/** settings['allowlist'](JSON 字符串数组)→ string[];缺省/非法/非数组 → [](=全量,DECISIONS §2) */
+/** settings['allowlist'](JSON 字符串数组)→ string[];缺省/非法/非数组 → [](=全量,spec:product/data-sources.md) */
 export function parseAllowlistSetting(raw: string | undefined): string[] {
   if (!raw) return [];
   try {

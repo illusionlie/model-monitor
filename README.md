@@ -27,7 +27,7 @@
         + 周报(每周五 21:00 北京时间后的首轮触发)
 ```
 
-核心语义(完整决策见 [`DECISIONS.md`](./DECISIONS.md)):
+核心语义(完整契约见 [`.trellis/spec/product/`](./.trellis/spec/product/index.md)):
 
 - 事件只有 `added` / `delisted`;`delisted` 需**连续 2 次**探测缺席才判死,首次缺席只内部标记;
 - 去重只发生在全局目录组内:同一模型在两个目录先后出现,只报第一次;渠道源永不参与去重;

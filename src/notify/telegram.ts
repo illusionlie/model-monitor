@@ -1,5 +1,5 @@
 /**
- * Telegram sendMessage(DECISIONS §5 / design §7):
+ * Telegram sendMessage(spec:product/notifications.md / design §7):
  * - HTML parse_mode;单条 ≤4096 字符(实体解析后)→ 保守按 3800 预算预分段
  * - 切分只发生在行边界;若切点落在 <blockquote expandable> 内,补闭合/重开标签
  * - 多段时每段补头部「标题 (i/n)」;同 chat 限速 1 条/秒——段间与**跨消息**

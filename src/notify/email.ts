@@ -1,5 +1,5 @@
 /**
- * 邮件发送(DECISIONS §5 / design §7):transport 按 settings.email_transport。
+ * 邮件发送(spec:product/notifications.md / design §7):transport 按 settings.email_transport。
  * - send_email binding(主力):结构化对象 env.SEND_EMAIL.send({to,from,subject,html,text});
  *   收件人即 settings.email_to(binding 无需在 wrangler.toml 配地址)
  * - Resend(后备):POST https://api.resend.com/emails,Bearer resend_api_key

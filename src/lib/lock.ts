@@ -1,5 +1,5 @@
 /**
- * D1 乐观锁(settings.run_lock = JSON {ts, holder},DECISIONS §6/§4):
+ * D1 乐观锁(settings.run_lock = JSON {ts, holder},spec:product/admin-and-feed.md + product/storage.md):
  * scheduled 与「立即运行」互斥,拿不到锁直接跳过本轮。
  * 抢占条件:无锁,或已持有锁的 ts 过期(默认 10min)——用条件 UPSERT 保证原子性,
  * meta.changes=0 即被他人持有。

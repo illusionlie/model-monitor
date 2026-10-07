@@ -1,4 +1,4 @@
-// cron_minutes → cron 表达式(DECISIONS §3 映射规则,纯函数)。
+// cron_minutes → cron 表达式(spec:product/scheduling.md 映射规则,纯函数)。
 //
 // - 空缺 / 非法 / ≤0 / 非整数 → 兜底 "*/30 * * * *"
 // - 1..59            → "*/N * * * *"(整点重置导致的间隔抖动可接受)

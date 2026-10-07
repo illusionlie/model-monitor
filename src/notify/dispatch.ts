@@ -1,9 +1,9 @@
 /**
- * 通知分发(DECISIONS §5/§7 通道矩阵):
+ * 通知分发(spec:product/notifications.md 通道矩阵):
  * - TG:tg_realtime ×(实时事件)/ tg_weekly ×(周报,见 weekly.ts);email 同理
  * - event_added_enabled / event_delisted_enabled 过滤 added/delisted;
  *   seed 确认 / 恢复通知走双通道「实时」开关;
- *   失败告警(source_fail)按 DECISIONS §5 只走 TG 实时通道,邮件不发
+ *   失败告警(source_fail)按 spec:product/notifications.md 只走 TG 实时通道,邮件不发
  * - suppressed=1 的一律不发(应在过滤阶段就丢弃)
  * - 单轮全部事件合并为一条消息(每源一节,render.ts)
  * - 发送成功的事件标记 events.notified=1
@@ -37,7 +37,7 @@ export function eligibleForTelegram(e: EventInsert, settings: SettingsMap): bool
   return e.suppressed !== 1 && baseEligible(e.kind, settings);
 }
 
-/** 邮件实时通道可见事件(失败告警只走 TG,DECISIONS §5) */
+/** 邮件实时通道可见事件(失败告警只走 TG,spec:product/notifications.md) */
 export function eligibleForEmail(e: EventInsert, settings: SettingsMap): boolean {
   if (e.kind === 'source_fail') return false;
   return e.suppressed !== 1 && baseEligible(e.kind, settings);

@@ -8,7 +8,7 @@
 import { formatDualBeijingUtc } from '../lib/time';
 import type { EventInsert } from '../db/events';
 
-/** 防刷屏阈值(DECISIONS §1):单源单轮 added 超过此数 → 降级 */
+/** 防刷屏阈值(spec:product/event-semantics.md):单源单轮 added 超过此数 → 降级 */
 export const DEGRADE_THRESHOLD = 15;
 /** 降级后仍内联展示的模型数 */
 const DEGRADE_SHOW = 3;

@@ -1,5 +1,5 @@
 /**
- * models 表读写(DECISIONS §4 硬要求:diff 在内存做,D1 只写变化;
+ * models 表读写(spec:product/storage.md 硬要求:diff 在内存做,D1 只写变化;
  * 稳定轮对 models 零写入,严禁每轮全量 upsert last_seen / last_state_change)。
  * 批量写一律 db.batch + 500 语句/批(design §4 subrequest 预算)。
  */
@@ -94,7 +94,7 @@ export async function countModelsBySource(db: D1Database): Promise<Map<number, n
   return new Map((res.results ?? []).map((r) => [r.source_id, r.n]));
 }
 
-/** 首缺未判死的模型(missing>=1)。hash 短路轮的判死确认用(DECISIONS §1:连续 2 次缺席) */
+/** 首缺未判死的模型(missing>=1)。hash 短路轮的判死确认用(spec:product/event-semantics.md:连续 2 次缺席) */
 export async function findMissingModelIds(db: D1Database, sourceId: number): Promise<string[]> {
   const res = await db
     .prepare('SELECT model_id FROM models WHERE source_id = ? AND missing >= 1')

@@ -88,7 +88,7 @@ export async function updateSourceStatus(
   await db.prepare(`UPDATE sources SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
 }
 
-/** 后台新增渠道源(DECISIONS §2);seed_done=0 → 下轮探测即静默 seed */
+/** 后台新增渠道源(spec:product/data-sources.md);seed_done=0 → 下轮探测即静默 seed */
 export async function createChannelSource(
   db: D1Database,
   input: { name: string; base_url: string; api_key?: string | null },
@@ -109,7 +109,7 @@ export async function deleteChannelSource(db: D1Database, id: number): Promise<v
   await db.prepare(`DELETE FROM sources WHERE id = ? AND kind = 'channel'`).bind(id).run();
 }
 
-/** 启停源(内置目录源只可启停不可删,DECISIONS §6) */
+/** 启停源(内置目录源只可启停不可删,spec:product/admin-and-feed.md) */
 export async function setSourceEnabled(
   db: D1Database,
   id: number,

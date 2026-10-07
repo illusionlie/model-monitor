@@ -57,7 +57,7 @@ export interface RunSummary {
 }
 
 const FETCH_TIMEOUT_MS = 15_000;
-const FAIL_ALERT_THRESHOLD = 3; // 连续 3 次探测失败 → source_fail + fail_alerted(DECISIONS §5)
+const FAIL_ALERT_THRESHOLD = 3; // 连续 3 次探测失败 → source_fail + fail_alerted(spec:product/notifications.md)
 
 class HttpProbeError extends Error {
   constructor(readonly status: number) {
@@ -108,7 +108,7 @@ function dedupGroupOf(src: SourceRow): string {
 }
 
 /**
- * 全局目录组去重(DECISIONS §1/§6,纯函数,单测覆盖):
+ * 全局目录组去重(spec:product/event-semantics.md,纯函数,单测覆盖):
  * 只对 dedup_group='catalog' 的 added 生效;历史已报过同 model_id → suppressed=1(入库但完全静默)。
  * 渠道组(channel:*)与其他事件类别永不受影响。返回压制条数。
  */
@@ -200,7 +200,7 @@ async function pollSource(
   const hash = await sha256Hex(buf);
   if (src.seed_done === 1 && src.rebaseline !== 1 && hash === src.last_hash) {
     const patch = recoveryPatch(src, roundEvents, nowIso);
-    // 判死确认(DECISIONS §1 连续 2 次缺席):hash 未变 ⇒ live 集与上次解析完全一致,
+    // 判死确认(spec:product/event-semantics.md 连续 2 次缺席):hash 未变 ⇒ live 集与上次解析完全一致,
     // 上次首缺的模型本次探测仍缺席 → 第 2 次,判死。稳定源无 missing 行时零写回。
     const pending = await findMissingModelIds(db, src.id);
     let delisted = 0;
@@ -315,7 +315,7 @@ async function pollSource(
   if (src.kind === 'catalog' && newEvents.length > 0) {
     const addedIds = newEvents.filter((e) => e.kind === 'added').map((e) => e.model_id as string);
     if (addedIds.length > 0) {
-      // 历史(已落库)∪ 本轮更早源的去重集合——DECISIONS §1 "只报第一次"覆盖同轮场景
+      // 历史(已落库)∪ 本轮更早源的去重集合——spec:product/event-semantics.md "只报第一次"覆盖同轮场景
       const reported = await findCatalogAdds(db, addedIds);
       for (const id of roundCatalogAdds) reported.add(id);
       suppressed = applyCatalogDedup(newEvents, reported);
@@ -355,7 +355,7 @@ export async function runOnce(env: Env, opts: RunOptions = {}): Promise<RunSumma
     const settings = await getSettings(db);
     const sources = await listEnabledSources(db);
     const roundEvents: EventInsert[] = [];
-    // 本轮目录组内已报过的 added model_id(同轮两个目录先后出现只报第一次,DECISIONS §1)
+    // 本轮目录组内已报过的 added model_id(同轮两个目录先后出现只报第一次,spec:product/event-semantics.md)
     const roundCatalogAdds = new Set<string>();
 
     for (const src of sources) {

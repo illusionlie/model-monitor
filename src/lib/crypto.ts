@@ -1,6 +1,6 @@
 /**
  * WebCrypto 工具(全部无外部依赖,Workers / Node 通用):
- * - sha256Hex:响应体 hash 短路(DECISIONS §4 硬要求)
+ * - sha256Hex:响应体 hash 短路(spec:product/storage.md 硬要求)
  * - PBKDF2(100k iter,workerd 生产硬上限)+ 常时比较:后台密码(design §9)
  * - HMAC-SHA256:无状态 session cookie 签名(design §9)
  */

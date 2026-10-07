@@ -6,7 +6,7 @@
 
 ## 第一优先级文档(按序读)
 
-1. **`DECISIONS.md`** — 产品契约的唯一权威:事件语义、调度、存储、通知、部署。实现与它冲突时以它为准;§10 是明确的"不做清单";§9 的外部事实带核实日期,怀疑过期先重核、别凭记忆。
+1. **`.trellis/spec/product/`** — 产品契约的唯一权威(原 `DECISIONS.md` 已于 2026-10-07 迁入并删除):入口 `product/index.md`,含事件语义、数据源、调度、存储、通知、后台、部署、验收。实现与契约冲突时以契约文件为准;`non-goals.md` 是明确的"不做清单";`external-facts.md` 的外部事实带核实日期,怀疑过期先重核、别凭记忆。**新的设计与决策只写进 `.trellis/spec/`,不再建根级决策记录文件。**
 2. **`.trellis/spec/backend/`** — 编码规范与 Key Gotchas。写任何代码前先读 `index.md`(含 workerd 生产环境特有的坑)。
 3. `.trellis/workflow.md` — 开发流程(Trellis 任务制、提交纪律)。
 

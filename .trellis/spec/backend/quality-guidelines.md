@@ -6,17 +6,17 @@
 
 ## Overview
 
-This project's quality bar is **contract fidelity**: DECISIONS.md is the authoritative spec; code reviews check implementation against it section by section (event semantics §1, storage §4, notifications §5, deployment §7, out-of-scope list §10).
+This project's quality bar is **contract fidelity**: the product contract in `.trellis/spec/product/` is the authoritative spec; code reviews check implementation against the contract files (event semantics `event-semantics.md`, storage `storage.md`, notifications `notifications.md`, deployment `deployment.md`, out-of-scope list `non-goals.md`).
 
 ---
 
 ## Forbidden Patterns
 
-- Reading business secrets from `env` / wrangler.toml — they are D1 `settings` rows (DECISIONS §5). `src/env.ts` may only declare `DB` and `SEND_EMAIL`.
+- Reading business secrets from `env` / wrangler.toml — they are D1 `settings` rows (spec:product/notifications.md). `src/env.ts` may only declare `DB` and `SEND_EMAIL`.
 - Node-only APIs (`node:*` imports, Node globals) in `src/**` — that code runs in the Worker runtime. Node types are enabled in tsconfig for `test/` and `scripts/` only; keep it that way.
 - Per-run full upsert of the `models` table (quota rule — see database-guidelines).
 - String-interpolated SQL; unescaped interpolation of user/model data into HTML (use the escape helpers in `render.ts` / `ui.ts`; remote data in admin UI goes through `textContent`).
-- New features from the §10 not-doing list (price events, RSS, log cleanup, KV, Cloudflare Access, better-auth, admin cron editing).
+- New features from the not-doing list in `product/non-goals.md` (price events, RSS, log cleanup, KV, Cloudflare Access, better-auth, admin cron editing).
 
 ## Required Patterns
 
@@ -33,7 +33,7 @@ This project's quality bar is **contract fidelity**: DECISIONS.md is the authori
 
 ## Code Review Checklist
 
-- [ ] Contract check against DECISIONS.md sections touched by the change
+- [ ] Contract check against the `.trellis/spec/product/` contract files touched by the change
 - [ ] Subrequest budget still ≤50/invocation and write quota re-justified if new writes added
 - [ ] No secrets in env/logs; HTML escaping; parameterized SQL
 - [ ] Admin routes behind auth middleware; `/setup` still closed post-init

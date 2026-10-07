@@ -1,4 +1,4 @@
-# 部署 workflow(DECISIONS §7 / design.md §10)
+# 部署 workflow(契约:.trellis/spec/product/deployment.md)
 #
 # 所需 GitHub secrets:
 #   CF_API_TOKEN        必需  Cloudflare API Token(最小权限:Account·Workers Scripts·Edit
@@ -10,7 +10,7 @@
 #   CUSTOM_DOMAIN       可选  自定义域名,非空时配置为 Workers 自定义域(custom_domain,
 #                              自动创建 DNS 记录与证书;要求域名 zone 在同一 CF 账号)
 #
-# 业务 secrets(TG token、Resend key、管理密码哈希等)只存 D1 settings,不经 CI(DECISIONS §5)。
+# 业务 secrets(TG token、Resend key、管理密码哈希等)只存 D1 settings,不经 CI(spec:product/notifications.md)。
 name: Deploy
 
 on:

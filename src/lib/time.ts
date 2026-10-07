@@ -1,10 +1,10 @@
 /**
- * 时间工具(DECISIONS §3):
+ * 时间工具(spec:product/scheduling.md):
  * - 存储一律 UTC ISO;展示层双标注「北京 … (UTC …)」
  * - 周报门控:每周五 21:00(Asia/Shanghai)后首个触发且本周未发
  *
  * 北京时间用 Intl 取墙钟,再映射到「naive UTC 毫秒」帧做日期运算——
- * 中国无夏令时,+08:00 固定偏移,该帧内加减天数是精确的(§11 授权实现方式)。
+ * 中国无夏令时,+08:00 固定偏移,该帧内加减天数是精确的(spec:product/index.md 非契约自由度授权)。
  */
 const BEIJING_TZ = 'Asia/Shanghai';
 

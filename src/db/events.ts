@@ -1,6 +1,6 @@
 /**
  * events 表:事件插入(db.batch)、去重查询(全局目录组)、最近事件 / 周报区间查询。
- * v1 不清理(DECISIONS §4)。
+ * v1 不清理(spec:product/storage.md)。
  */
 export type EventKind = 'added' | 'delisted' | 'seed' | 'source_fail' | 'source_recovered';
 
@@ -72,7 +72,7 @@ export async function markEventsNotified(db: D1Database, ids: number[]): Promise
 }
 
 /**
- * 全局目录组去重查询(DECISIONS §6):这些 model_id 中哪些历史上已在 catalog 组报过 added。
+ * 全局目录组去重查询(spec:product/admin-and-feed.md):这些 model_id 中哪些历史上已在 catalog 组报过 added。
  * 渠道源(dedup_group='channel:{id}')不进此查询,天然永不参与去重。
  * D1 绑定参数上限 100 → IN 列表按 90 一段分块。
  */

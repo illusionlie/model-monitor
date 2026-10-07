@@ -1,6 +1,6 @@
 # Backend Development Guidelines
 
-> Conventions for this Cloudflare Worker (Hono + D1, free-tier constrained). Source of truth for product semantics: `DECISIONS.md` at repo root.
+> Conventions for this Cloudflare Worker (Hono + D1, free-tier constrained). Source of truth for product semantics: `.trellis/spec/product/` (start at its `index.md`).
 
 ---
 

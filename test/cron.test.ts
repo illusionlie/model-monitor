@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FALLBACK_CRON, minutesToCron } from '../src/lib/cron';
 
-describe('minutesToCron(DECISIONS §3 映射规则)', () => {
+describe('minutesToCron(spec:product/scheduling.md 映射规则)', () => {
   it('空/非法/≤0/非整数/非数值类型 → 兜底 */30', () => {
     const invalid: unknown[] = [
       '', '   ', 'abc', '12x', '1.5', 'NaN', 'Infinity', '-Infinity',

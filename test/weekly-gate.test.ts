@@ -3,10 +3,10 @@ import { beijingWeekStart, beijingWeekId, weeklyDue } from '../src/lib/time';
 
 /**
  * 2026-10-09 是本周(2026-W41,周一起 10-05)的周五。
- * 北京 21:00 = UTC 13:00。门控语义(DECISIONS §3):每周五 21:00(Asia/Shanghai)后首个触发且本周未发。
+ * 北京 21:00 = UTC 13:00。门控语义(spec:product/scheduling.md):每周五 21:00(Asia/Shanghai)后首个触发且本周未发。
  */
 
-describe('周报门控 weeklyDue(design §8 / DECISIONS §3)', () => {
+describe('周报门控 weeklyDue(design §8 / spec:product/scheduling.md)', () => {
   it('周五 20:59(北京)不触发', () => {
     expect(weeklyDue(new Date('2026-10-09T12:59:00Z'), undefined)).toBeNull();
     expect(weeklyDue(new Date('2026-10-09T12:59:59Z'), null)).toBeNull();

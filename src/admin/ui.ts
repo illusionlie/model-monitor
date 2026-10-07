@@ -168,7 +168,7 @@ export function renderAdminPage(): string {
         <div class="chk"><input type="checkbox" id="event_added_enabled"><span>新增事件(added)</span></div>
         <div class="chk"><input type="checkbox" id="event_delisted_enabled"><span>下架事件(delisted)</span></div>
       </div>
-      <p class="muted">失败告警固定走 TG 实时通道(DECISIONS §5),不受上表影响。</p>
+      <p class="muted">失败告警固定走 TG 实时通道(spec:product/notifications.md),不受上表影响。</p>
     </fieldset>
     <fieldset><legend>allowlist(目录源 provider 白名单,仅 OpenRouter / models.dev 生效)</legend>
       <textarea id="allowlist" placeholder="每行一个或逗号分隔,如:&#10;openai&#10;anthropic&#10;留空 = 全量"></textarea>

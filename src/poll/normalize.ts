@@ -2,7 +2,7 @@
  * 三类源响应 → NormalizedModel[](design §2 / implement.md A-6):
  * - 目录源(结构自适配):`{data:[{id,...}]}` 列表式(OpenRouter);
  *   `{provider → {models:{slug → 字段}}}` 字典式(models.dev,id=`{provider}/{slug}` 若无前缀)
- * - 渠道源:`{data:[{id,...}]}`,只认 id(created 不可信,DECISIONS §2)
+ * - 渠道源:`{data:[{id,...}]}`,只认 id(created 不可信,spec:product/data-sources.md)
  * 判定永远只看 id 集合;富字段只进 snapshot 供展示。
  */
 import type { SourceKind } from '../db/sources';
@@ -109,7 +109,7 @@ export function normalizeResponse(kind: SourceKind, text: string): NormalizedMod
   return normalizeProviderDict(json);
 }
 
-/** allowlist(provider 白名单)仅作用于目录源;空 = 全量(含 trim 后全为空白的情况,DECISIONS §2) */
+/** allowlist(provider 白名单)仅作用于目录源;空 = 全量(含 trim 后全为空白的情况,spec:product/data-sources.md) */
 export function applyAllowlist(models: NormalizedModel[], allowlist: readonly string[]): NormalizedModel[] {
   const allow = new Set(allowlist.map((p) => p.trim().toLowerCase()).filter(Boolean));
   if (allow.size === 0) return models;

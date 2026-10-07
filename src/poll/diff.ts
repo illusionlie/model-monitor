@@ -7,7 +7,7 @@
  * | 无   | 有, missing=0    | missingFirst(UPDATE missing=1)        | 无(静默)   |
  * | 无   | 有, missing=1    | delisted(DELETE,判死=连续 2 次缺席)  | delisted    |
  * | 有   | 有, missing=1    | recovered(UPDATE missing=0)           | 无(不报 added)|
- * | 有   | 有, missing=0    | 不写(不刷 last_seen,DECISIONS §4)   | 无          |
+ * | 有   | 有, missing=0    | 不写(不刷 last_seen,spec:product/storage.md)   | 无          |
  */
 export interface PrevModel {
   model_id: string;
