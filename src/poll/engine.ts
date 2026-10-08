@@ -399,7 +399,7 @@ export async function runOnce(env: Env, opts: RunOptions = {}): Promise<RunSumma
       } catch (err) {
         console.error('[notify] dispatch 失败(事件已落库,不重试):', err);
       }
-      // 周报门控:周五 21:00 北京时间后首个触发且本周未发;发送成功才写回 weekly_last_sent
+      // 周报门控:周五 21:00 北京时间后首个触发且本周未发;weekly() 正常返回即写回(发送失败被其内部吞掉,仅留 notify_fail 事件)
       const due = weeklyDue(now, settings['weekly_last_sent']);
       if (due) {
         try {

@@ -2,7 +2,7 @@
  * events 表:事件插入(db.batch)、去重查询(全局目录组)、最近事件 / 周报区间查询。
  * v1 不清理(spec:product/storage.md)。
  */
-export type EventKind = 'added' | 'delisted' | 'seed' | 'source_fail' | 'source_recovered';
+export type EventKind = 'added' | 'delisted' | 'seed' | 'source_fail' | 'source_recovered' | 'notify_fail';
 
 export interface EventRow {
   id: number;
@@ -21,9 +21,9 @@ export interface EventInsert {
   source_id: number;
   source_name: string;
   kind: EventKind;
-  model_id: string | null; // seed / source_fail / source_recovered 为 null
-  dedup_group: string; // 'catalog' | 'channel:{source_id}'
-  suppressed: number; // 1 = 已入库但完全静默(全局组内重复 added)
+  model_id: string | null; // seed / source_fail / source_recovered / notify_fail 为 null
+  dedup_group: string; // 'catalog' | 'channel:{source_id}' | 'notify:{channel}'(系统级失败事件)
+  suppressed: number; // 1 = 已入库但完全静默(全局组内重复 added / notify_fail 推送失败记录)
   notified: number; // 由通知层(B)发送后置 1
   payload: string | null; // JSON 快照
   detected_at: string; // UTC ISO

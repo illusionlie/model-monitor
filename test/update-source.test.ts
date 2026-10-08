@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createChannelSource, updateChannelSource } from '../src/db/sources';
+import { createChannelSource, deleteChannelSource, updateChannelSource } from '../src/db/sources';
 import { D1Stub } from './helpers/d1';
 
 const NOW = '2026-10-07T12:00:00.000Z';
@@ -47,6 +47,18 @@ describe('updateChannelSource:动态 SET 与绑定参数(内存 D1 stub)', () =>
     expect(db.executed[0].sql).not.toContain('api_key');
     expect(db.executed[0].sql).not.toContain('extra_headers');
     expect(db.executed[0].params).toEqual(['https://b.example/models', NOW, 5]);
+  });
+});
+
+describe('deleteChannelSource:0004 去 FK 后显式删事件(行为与「事件记录一并删除」文案等价)', () => {
+  it('batch 两条 DELETE:先 events 后 sources,绑定 [id]', async () => {
+    const db = new D1Stub();
+    await deleteChannelSource(db, 9);
+    expect(db.executed).toHaveLength(2);
+    expect(db.executed[0].sql).toBe('DELETE FROM events WHERE source_id = ?');
+    expect(db.executed[0].params).toEqual([9]);
+    expect(db.executed[1].sql).toBe(`DELETE FROM sources WHERE id = ? AND kind = 'channel'`);
+    expect(db.executed[1].params).toEqual([9]);
   });
 });
 

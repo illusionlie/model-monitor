@@ -55,6 +55,14 @@ describe('后台 UI 骨架(design §4,纯字符串断言)', () => {
     expect(admin).toContain('function headersToText');
   });
 
+  it('notify_fail 事件:徽章映射「推送失败」、备注「未推送(通道故障)」、配色复用 --tag-fail(任务 10-08)', () => {
+    expect(admin).toContain("notify_fail:['推送失败','t-notify_fail']");
+    expect(admin).toContain("ev.kind==='notify_fail'?'未推送(通道故障)'");
+    // 其余 suppressed 事件仍显示目录组去重文案(分支顺序:notify_fail 优先于通用 suppressed 文案)
+    expect(admin).toContain("ev.suppressed?'已静默(目录组去重)'");
+    expect(admin).toContain('.t-notify_fail{background:var(--tag-fail)}');
+  });
+
   it('客户端脚本内禁用反引号与 "${"(TS 模板冲突防护)', () => {
     for (const html of [admin, renderLoginPage(), renderSetupPage()]) {
       const scripts = scriptsOf(html);

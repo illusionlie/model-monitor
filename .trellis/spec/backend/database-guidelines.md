@@ -28,6 +28,7 @@ The `models` table has **no `last_seen` column by design**: stable rows are neve
 
 - `migrations/0001_init.sql` — applied by CI via `wrangler d1 migrations apply --remote` (detection + `force_migrations` input, see `.github/workflows/deploy.yml`).
 - New schema changes = new numbered migration files. Amending an already-deployed migration is forbidden; amending `0001` was only acceptable pre-first-deploy.
+- Constraint changes require a table rebuild (SQLite cannot ALTER a constraint): `0004_notify_fail_events.sql` is the reference pattern — create-copy (explicit column lists on both sides, preserving `id`) → drop → rename → recreate indexes under their original names.
 - Local dev: `npx wrangler d1 migrations apply <name> --local` (local state under `.wrangler/`, gitignored).
 
 ## Naming Conventions
@@ -40,4 +41,4 @@ The `models` table has **no `last_seen` column by design**: stable rows are neve
 - **Don't** upsert the whole model list per run (quota killer — see write-amplification rule).
 - **Don't** forget that `models` uses composite PK `(source_id, model_id)` with `WITHOUT ROWID`; `events.id` is the only AUTOINCREMENT.
 - `events.source_name` is intentionally denormalized so `/feed` stays readable after a source is deleted.
-- Dedup semantics live in `dedup_group` (`catalog` vs `channel:{source_id}`) — never dedup a channel source against anything.
+- Dedup semantics live in `dedup_group` (`catalog` vs `channel:{source_id}`) — never dedup a channel source against anything. `notify:{channel}` marks system-level `notify_fail` events (`source_id=0`); it never participates in any dedup query.

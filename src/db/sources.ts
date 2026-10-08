@@ -143,9 +143,16 @@ export async function updateChannelSource(
   await db.prepare(`UPDATE sources SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
 }
 
-/** 删除渠道源;内置目录源(migration 预置)不允许删,保持 v1 语义稳定 */
+/**
+ * 删除渠道源;内置目录源(migration 预置)不允许删,保持 v1 语义稳定。
+ * migration 0004 起 events 不再 FK 级联,该源事件改在此显式删除(行为与后台文案「事件记录一并删除」不变);
+ * models 行仍由自身 FK 的 ON DELETE CASCADE 删除。
+ */
 export async function deleteChannelSource(db: D1Database, id: number): Promise<void> {
-  await db.prepare(`DELETE FROM sources WHERE id = ? AND kind = 'channel'`).bind(id).run();
+  await db.batch([
+    db.prepare('DELETE FROM events WHERE source_id = ?').bind(id),
+    db.prepare(`DELETE FROM sources WHERE id = ? AND kind = 'channel'`).bind(id),
+  ]);
 }
 
 /**

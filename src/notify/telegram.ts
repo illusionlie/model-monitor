@@ -4,7 +4,7 @@
  * - 切分只发生在行边界;若切点落在 <blockquote expandable> 内,补闭合/重开标签
  * - 多段时每段补头部「标题 (i/n)」;同 chat 限速 1 条/秒——段间与**跨消息**
  *   (实时通知 → 周报背靠背、测试通知 → 立即运行)统一由模块级 lastSendAtMs 节流
- * - 单段失败只 console.error,不重试不阻塞其余段
+ * - 单段失败只 console.error,不重试不阻塞其余段;失败摘要收集进 result.errors(供 notify_fail 事件落库)
  */
 import type { SettingsMap } from '../db/settings';
 
@@ -94,6 +94,13 @@ export function splitTelegramHtml(html: string, budget: number = TG_BUDGET): str
 export interface TelegramSendResult {
   sent: number; // 成功段数
   total: number;
+  errors: string[]; // 逐段失败摘要(与失败段数等长;≤200 字符)
+}
+
+/** err → ≤200 字符摘要(只归一长度,不做 engine 的探测错误分类——语义不同) */
+function summarizeError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.length > 200 ? `${msg.slice(0, 197)}...` : msg;
 }
 
 async function sendSegment(token: string, chatId: string, text: string): Promise<void> {
@@ -115,7 +122,7 @@ async function sendSegment(token: string, chatId: string, text: string): Promise
 /** 同 chat 最近一次发送时刻(模块级:同一 isolate 内跨调用生效,保证任意两次发送间隔 ≥1s) */
 let lastSendAtMs = 0;
 
-/** 分段发送 + 1 msg/s 节流(段间与跨消息一致);单段失败 console.error 不阻塞 */
+/** 分段发送 + 1 msg/s 节流(段间与跨消息一致);单段失败 console.error 不阻塞,摘要收集进 errors */
 export async function notifyTelegram(
   token: string,
   chatId: string,
@@ -124,6 +131,7 @@ export async function notifyTelegram(
 ): Promise<TelegramSendResult> {
   const parts = splitTelegramHtml(html, budget);
   let sent = 0;
+  const errors: string[] = [];
   for (let i = 0; i < parts.length; i++) {
     const waitMs = lastSendAtMs + SEGMENT_SLEEP_MS - Date.now();
     if (waitMs > 0) await sleep(waitMs);
@@ -133,7 +141,8 @@ export async function notifyTelegram(
       sent++;
     } catch (err) {
       console.error(`[notify] TG 第 ${i + 1}/${parts.length} 段发送失败(不阻塞其余段):`, err);
+      errors.push(summarizeError(err));
     }
   }
-  return { sent, total: parts.length };
+  return { sent, total: parts.length, errors };
 }

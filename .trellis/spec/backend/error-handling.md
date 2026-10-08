@@ -23,7 +23,7 @@ Three fetch-failure classes (logged with source name, stored abbreviated in `sou
 
 - `poll/engine.ts` wraps **each source** in try/catch: failure → `recordFailure` (increment `consecutive_failures`), continue with next source. The whole `runOnce` is additionally wrapped (scheduled entry) so cron never dies silently.
 - **Alert-exactly-once pattern**: at `consecutive_failures == 3 && fail_alerted == 0` → emit `source_fail` event + set `fail_alerted=1`; further failures stay silent. Success with `fail_alerted=1` → `source_recovered` event + reset both. Never alert on every failing run.
-- Notification send failures (TG segment, email) are `console.error` + move on; they never throw into the engine and never mark events back.
+- Notification send failures (TG segment, email) are `console.error` + move on; they never throw into the engine. Since 2026-10-08 each attempted-but-not-fully-delivered channel also records a `notify_fail` system event (`source_id=0`, `suppressed=1`, `dedup_group='notify:{channel}'`, payload `{channel, sent?, total?, error}`) so the failure is visible in admin recent events / `/feed`. `suppressed=1` guarantees the event itself is never re-notified (no alert loop) and is excluded from weekly aggregation. Events are marked `notified=1` only on full delivery (TG `sent === total`, email ok) — partial failure must not read as "notified". Channels that are disabled or unconfigured were never attempted → no `notify_fail`.
 - Hash short-circuit ≠ failure: unchanged body still advances the 2-strike delisted confirmation (a model absent from an unchanged response is still absent — see `findMissingModelIds` call in the short-circuit branch of `engine.ts`).
 
 ## API Error Responses

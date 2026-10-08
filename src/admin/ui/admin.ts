@@ -144,7 +144,7 @@ function fmtParts(d,tz){
   return p.year+'-'+p.month+'-'+p.day+' '+p.hour+':'+p.minute;
 }
 function fmtDual(iso){try{var d=new Date(iso);return '北京 '+fmtParts(d,'Asia/Shanghai')+' (UTC '+fmtParts(d,'UTC')+')';}catch(e){return iso;}}
-var KINDS={added:['新增','t-added'],delisted:['下架','t-delisted'],seed:['接入','t-seed'],source_fail:['失败','t-source_fail'],source_recovered:['恢复','t-source_recovered']};
+var KINDS={added:['新增','t-added'],delisted:['下架','t-delisted'],seed:['接入','t-seed'],source_fail:['失败','t-source_fail'],source_recovered:['恢复','t-source_recovered'],notify_fail:['推送失败','t-notify_fail']};
 function showOut(id,text){var o=$(id);o.hidden=false;o.textContent=text;}
 
 // ---- 标签页(hash 持久 + panelIn 进入动画) ----
@@ -272,7 +272,7 @@ function renderEvents(){
     tr.appendChild(el('td',null,ev.source_name));
     var k=KINDS[ev.kind]||[ev.kind,''];var kd=el('td');kd.appendChild(el('span','tag '+k[1],k[0]));tr.appendChild(kd);
     tr.appendChild(el('td','wrap',(ev.model_id||'-')));
-    var note=ev.suppressed?'已静默(目录组去重)':(ev.notified?'已通知':'未通知');
+    var note=ev.kind==='notify_fail'?'未推送(通道故障)':(ev.suppressed?'已静默(目录组去重)':(ev.notified?'已通知':'未通知'));
     tr.appendChild(el('td','muted',note));
     tb.appendChild(tr);
   });

@@ -3,7 +3,7 @@
  * - send_email binding(主力):结构化对象 env.SEND_EMAIL.send({to,from,subject,html,text});
  *   收件人即 settings.email_to(binding 无需在 wrangler.toml 配地址)
  * - Resend(后备):POST https://api.resend.com/emails,Bearer resend_api_key
- * 失败只 console.error 记日志,不抛出(不中断 cron / 周报)。
+ * 失败只 console.error 记日志,不抛出(不中断 cron / 周报);失败摘要随返回值带出(供 notify_fail 事件落库)。
  */
 import type { Env } from '../env';
 import type { SettingsMap } from '../db/settings';
@@ -22,17 +22,31 @@ export function emailConfigured(settings: SettingsMap): boolean {
   return true;
 }
 
-/** 发送;成功 true,失败/未配置 false(失败细节进日志) */
+export interface EmailSendResult {
+  ok: boolean;
+  error?: string; // 失败摘要(各失败分支的 console.error 文案对应摘要,≤200 字符)
+}
+
+/** err / 文案 → ≤200 字符摘要 */
+function summarize(msg: string): string {
+  return msg.length > 200 ? `${msg.slice(0, 197)}...` : msg;
+}
+
+function fail(error: string): EmailSendResult {
+  return { ok: false, error: summarize(error) };
+}
+
+/** 发送;成功 {ok:true},失败 {ok:false,error:摘要}(失败细节仍进日志) */
 export async function sendEmail(
   env: Env,
   settings: SettingsMap,
   msg: EmailMessage,
-): Promise<boolean> {
+): Promise<EmailSendResult> {
   const to = settings['email_to']?.trim();
   const from = settings['email_from']?.trim();
   if (!to || !from) {
     console.error('[notify] email 跳过:email_to / email_from 未配置');
-    return false;
+    return fail('email_to / email_from 未配置');
   }
   const structured = { to, from, subject: msg.subject, html: msg.html, text: msg.text };
 
@@ -40,7 +54,7 @@ export async function sendEmail(
     const key = settings['resend_api_key']?.trim();
     if (!key) {
       console.error('[notify] email 跳过:transport=resend 但 resend_api_key 未配置');
-      return false;
+      return fail('transport=resend 但 resend_api_key 未配置');
     }
     try {
       const res = await fetch('https://api.resend.com/emails', {
@@ -49,25 +63,28 @@ export async function sendEmail(
         body: JSON.stringify(structured),
       });
       if (!res.ok) {
-        console.error(`[notify] Resend 发送失败: HTTP ${res.status} ${await res.text().catch(() => '')}`);
-        return false;
+        const body = await res.text().catch(() => '');
+        console.error(`[notify] Resend 发送失败: HTTP ${res.status} ${body}`);
+        return fail(`Resend 发送失败: HTTP ${res.status} ${body}`.trim());
       }
-      return true;
+      return { ok: true };
     } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
       console.error('[notify] Resend 请求异常:', err);
-      return false;
+      return fail(`Resend 请求异常: ${detail}`);
     }
   }
 
   if (!env.SEND_EMAIL) {
     console.error('[notify] email 跳过:transport=send_email 但 SEND_EMAIL binding 未部署(需 Dashboard 开启 Email)');
-    return false;
+    return fail('SEND_EMAIL binding 未部署(需 Dashboard 开启 Email)');
   }
   try {
     await env.SEND_EMAIL.send(structured);
-    return true;
+    return { ok: true };
   } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
     console.error('[notify] send_email binding 发送失败:', err);
-    return false;
+    return fail(`send_email binding 发送失败: ${detail}`);
   }
 }

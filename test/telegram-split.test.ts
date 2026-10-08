@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { splitTelegramHtml, TG_BUDGET } from '../src/notify/telegram';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { notifyTelegram, splitTelegramHtml, TG_BUDGET } from '../src/notify/telegram';
 
 /** 构造一条典型的本轮变更消息:标题 + 时间 + 每源一节(blockquote 包模型列表) */
 function buildMessage(modelCount: number, lineLen = 60): string {
@@ -71,5 +71,45 @@ describe('TG 分段(design §7:3800 预算 / 行边界 / 段头 / blockquote 补
     const parts = splitTelegramHtml(msg, 300);
     expect(parts.length).toBeGreaterThan(1);
     for (const p of parts) expect(p.length).toBeLessThanOrEqual(300);
+  });
+});
+
+describe('notifyTelegram:失败段收集 errors(任务 10-08-notify-fail-event,mock fetch)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('单段且失败(fetch 异常)→ sent=0,errors 含异常摘要(≤200 字符)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+    const r = await notifyTelegram('t', 'c', 'hello');
+    expect(r.sent).toBe(0);
+    expect(r.total).toBe(1);
+    expect(r.errors).toHaveLength(1);
+    expect(r.errors[0]).toContain('fetch failed');
+    expect(r.errors[0]!.length).toBeLessThanOrEqual(200);
+  });
+
+  it('多段部分失败(第 2 段 HTTP 429)→ 成功段计 sent,失败段摘要进 errors', async () => {
+    const long = 'a'.repeat(3000);
+    const msg = ['T', long, long].join('\n');
+    expect(splitTelegramHtml(msg)).toHaveLength(2); // 前置:确为 2 段
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('{"ok":true}', { status: 200 }))
+      .mockResolvedValue(new Response('{"ok":false,"description":"Too Many Requests"}', { status: 429 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await notifyTelegram('t', 'c', msg);
+    expect(r.sent).toBe(1);
+    expect(r.total).toBe(2);
+    expect(r.errors).toEqual(['Telegram sendMessage HTTP 429']);
+  });
+
+  it('非 2xx 且 body ok=false → 摘要取 HTTP 状态行;全部成功 → errors 为空', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"ok":true}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await notifyTelegram('t', 'c', 'hello');
+    expect(r.sent).toBe(1);
+    expect(r.total).toBe(1);
+    expect(r.errors).toEqual([]);
   });
 });

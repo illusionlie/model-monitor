@@ -13,6 +13,7 @@ import { eventsBetween, type EventRow } from '../db/events';
 import { listAllSources } from '../db/sources';
 import { notifyTelegram, tgConfigured } from './telegram';
 import { emailConfigured, sendEmail } from './email';
+import { recordNotifyFail } from './dispatch';
 import { groupBySource, renderWeeklyEmail, renderWeeklyTg, type WeeklyData } from './render';
 
 /** 周事件(剔除 suppressed)→ WeeklyData(suppressed 语义:完全静默,周报同样不可见) */
@@ -68,12 +69,19 @@ export async function sendWeeklyReport(env: Env, now: Date = new Date()): Promis
       settings['tg_chat_id']!.trim(),
       renderWeeklyTg(data, now),
     );
-    if (r.sent === 0) console.error('[notify] 周报 TG 全部段发送失败');
+    // 发送失败(全部/部分段)→ 落 notify_fail 可见事件;门控照常标记(本函数不抛错),失败仅留记录、内容不自动重发
+    if (r.sent < r.total) {
+      console.error(`[notify] 周报 TG 发送失败(${r.sent}/${r.total} 段)`);
+      await recordNotifyFail(env.DB, 'telegram', { sent: r.sent, total: r.total, error: r.errors[0] }, now.toISOString());
+    }
   }
   if (parseBool(settings['email_weekly']) && emailConfigured(settings)) {
     anyChannelOn = true;
-    const ok = await sendEmail(env, settings, renderWeeklyEmail(data, now));
-    if (!ok) console.error('[notify] 周报邮件发送失败');
+    const r = await sendEmail(env, settings, renderWeeklyEmail(data, now));
+    if (!r.ok) {
+      console.error('[notify] 周报邮件发送失败');
+      await recordNotifyFail(env.DB, 'email', { error: r.error }, now.toISOString());
+    }
   }
   if (!anyChannelOn) console.log('[notify] 周报:无已启用的周报通道,本周标记为已处理');
 }

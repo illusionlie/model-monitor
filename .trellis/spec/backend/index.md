@@ -31,6 +31,7 @@ Single Worker: cron poller (model catalog/channel diff), Telegram + email notifi
 5. **CI TOML insertion**: top-level keys (`routes`) must be sed-inserted before the first table header (`[[d1_databases]]`/`[[send_email]]`), or they attach to the wrong table.
 6. **`wrangler d1 list --json` returns a bare array** (v4) — CI jq expressions are written against that shape.
 7. **workerd production caps WebCrypto PBKDF2 at 100,000 iterations**: `deriveBits` above that throws `NotSupportedError` in production, while `wrangler dev` does NOT enforce the cap — local passes, prod 500s. `lib/crypto.ts` pins `100_000`; Node-based vitest also doesn't enforce, so tests can't catch this class.
+8. **D1 enforces foreign keys by default** (unlike vanilla SQLite, `wrangler dev` local D1, and the vitest D1 stub): a system-level row such as `events(source_id=0)` for `notify_fail` violates the old `events→sources` FK in production only. Migration `0004` dropped that FK; channel-source deletion now deletes its events explicitly in `db/sources.ts::deleteChannelSource` — keep that pairing (no-FK table + explicit app-level delete) intact when touching either side.
 
 ---
 
