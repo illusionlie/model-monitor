@@ -1,5 +1,6 @@
 /**
  * 后台路由(design §9,全部挂同一 Worker):
+ * - /:公开主页(2026-10-08)——无鉴权,三个聚合数字;Cache API 60s 防刷,缓存未命中恰 1 条 D1 语句
  * - /setup:仅 settings 无 admin_password 时开放;成功后永久关闭(已初始化一律 404)
  * - /admin/login、/admin/logout、GET /admin(未登录渲染登录页)
  * - /admin/api/*:state / settings / sources / run / test-notify / feed-secret(写操作均过 cookie 鉴权)
@@ -24,12 +25,13 @@ import {
 } from '../db/sources';
 import { countModelsBySource } from '../db/models';
 import { recentEvents } from '../db/events';
+import { getHomeStats } from '../db/stats';
 import { pbkdf2Hash, randomToken, timingSafeEqual } from '../lib/crypto';
 import { parseStoredHeaders, sanitizeHeaderMap } from '../lib/headers';
 import { runOnce } from '../poll/engine';
 import { makeNotifyHooks, sendTestNotification } from '../notify/dispatch';
 import { SESSION_COOKIE, SESSION_TTL_MS, issueSessionToken, verifyAdminPassword, verifySessionToken } from './auth';
-import { renderAdminPage, renderLoginPage, renderSetupPage } from './ui';
+import { renderAdminPage, renderHomePage, renderLoginPage, renderSetupPage } from './ui';
 
 const nowIso = (): string => new Date().toISOString();
 
@@ -80,6 +82,33 @@ function normalizeAllowlistInput(input: unknown): string[] | null {
 }
 
 export function registerRoutes(app: Hono<{ Bindings: Env }>): void {
+  // ---------- /(公开主页,无鉴权) ----------
+  app.get('/', async (c) => {
+    // 免费档防刷:Cache API 60s 整页缓存,命中 → 零 D1;未命中 → 恰 1 条聚合查询(spec:product/admin-and-feed.md)。
+    // 缓存键归一化为 origin + '/':/?x=1 之类变参 query 不再各占一条目、绕不过防刷。
+    // caches 缺失或 match/put 抛错 → 一律降级直查直返,缓存故障绝不影响页面。
+    const cacheKey = new URL(c.req.url).origin + '/';
+    const cache = typeof caches !== 'undefined' ? caches.default : null;
+    let cached: Response | undefined;
+    try {
+      cached = cache ? await cache.match(cacheKey) : undefined;
+    } catch {
+      /* 降级直查 */
+    }
+    if (cached) return cached;
+
+    const stats = await getHomeStats(c.env.DB);
+    const response = c.html(renderHomePage(stats), 200, { 'Cache-Control': 'public, max-age=60' });
+    if (cache) {
+      try {
+        await cache.put(cacheKey, response.clone()); // put 消费 clone,原响应返回客户端
+      } catch {
+        /* 降级直返 */
+      }
+    }
+    return response;
+  });
+
   // ---------- /setup ----------
   app.get('/setup', async (c) => {
     const settings = await getSettings(c.env.DB);

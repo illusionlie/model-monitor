@@ -11,3 +11,11 @@
 ## Feed
 
 - `GET /feed`,secret header 鉴权:事件列表(时间倒序)+ 每源统计(当前模型总数、last_success)。RSS 二期。
+
+## 公开主页(2026-10-08 新增)
+
+- `GET /` 无鉴权落地页:品牌区(服务名 + 一句话定位)+ 三点能力简介(目录+渠道双类源、Telegram 与邮件通知、密码保护后台)+「进入后台」入口与 GitHub 仓库链接;未初始化(全新部署)同样可用,三个数字为 0。
+- 三个聚合数字,**单条 SQL 子查询合并**:启用源数(`sources.enabled=1`)、在架模型数(`models.missing=0`)、近 24h `added`+`delisted` 事件数(seed/source_fail/source_recovered/notify_fail 系统类不计数)。
+- 免费档预算:缓存未命中恰 **1 条 D1 语句**;Cache API(`caches.default`,60s)整页缓存防刷,命中 0 条 D1;环境不支持 caches 或读写失败一律优雅降级直查,页面不受影响。
+- 信息暴露边界:公开内容仅上述三个聚合数字;源名 / base_url / 模型 ID / 事件内容 / settings 值一律不入页(能力简介也不点名具体目录源)。
+- 未知路径仍 JSON 404;`/setup`、`/admin`、`/feed` 行为不变。
