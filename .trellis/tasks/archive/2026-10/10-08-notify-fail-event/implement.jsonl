@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/product/event-semantics.md", "reason": "事件语义核心契约(类别/去重/静默);新增 notify_fail 不得破坏其中既有语义"}
+{"file": ".trellis/spec/product/notifications.md", "reason": "通道矩阵与失败处理契约;本任务改 dispatchRound 判定与 notified 语义前先读"}
+{"file": ".trellis/spec/product/storage.md", "reason": "events 表契约与 D1 写纪律(diff 只写变化、hash 短路),migration 0004 不得触碰"}
+{"file": ".trellis/spec/product/admin-and-feed.md", "reason": "后台最近事件与 /feed 展示契约;notify_fail 徽章与备注文案需符合"}
+{"file": ".trellis/spec/backend/index.md", "reason": "后端规范索引与 workerd 生产 gotchas(本地全绿≠线上能跑)"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "migration 纪律(禁止改既有 migration)与 D1/subrequest 预算算法;新增写路径必须重算两笔账"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "测试要求:新行为必须有边界用例(全失败/部分失败/未配置/双通道)"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "模块分层约束:SQL 只允许出现在 src/db/,dispatch 只做编排"}

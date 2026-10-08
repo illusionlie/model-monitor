@@ -92,3 +92,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 5: 通知失败可见性(notify_fail)
+
+**Date**: 2026-10-08
+**Task**: 10-08-notify-fail-event
+**Branch**: `main`
+
+### Summary
+
+用户反馈:TG 推送失败的报错只在 CF Dashboard 可见,要求至少能在后台「最近事件(50)」看到。评估确认三连问题:失败不可见、部分段失败仍全标 notified=1(谎报已通知)、events.source_id 的 FK 使系统级事件无合法 source_id(D1 默认强制外键,与本地 SQLite/vitest stub 相反——已记 backend/index.md gotcha #8)。方案:新事件类别 notify_fail(source_id=0、suppressed=1 复用静默机制→永不进任何通知通道、周报聚合自动排除、零循环风险;dedup_group=notify:{channel})+ migration 0004(events 去 FK 重建,删源改应用层显式删 events,「事件记录一并删除」文案行为不变)。notified 改为 TG sent===total / email ok 才标;sendEmail 返回 {ok,error}、notifyTelegram 返回 errors;测试通知失败直回摘要;后台徽章「推送失败」/备注「未推送(通道故障)」。trellis-implement 实施 + trellis-check PASS-WITH-P2(唯一 P1:weekly 门控注释错误——实际发送失败被吞后门控仍标记、内容不重发,已修正注释与 prd/design 同源表述;P2 补 deleteChannelSource batch 测试)。预算复算最坏轮 ≈43≤50。typecheck 0 错、141 用例全绿。本地 migration 0004 apply 验证过(幂等);线上由 CI 自动应用。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| 845e74b | feat: 通知发送失败落 notify_fail 事件(后台最近事件可见)+ notified 全送达语义修正 |
+| (本次) | chore: 任务归档(notify-fail-event)+ journal Session 5 |
+
+### Status
+
+[OK] **Completed**
