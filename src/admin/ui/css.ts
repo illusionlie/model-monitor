@@ -51,7 +51,7 @@ details{margin-top:6px}
 summary{cursor:pointer;font-size:13px;color:var(--fg-soft);margin:8px 0 3px}
 .tblwrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;white-space:nowrap}
+th,td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle;white-space:nowrap}
 th{color:var(--fg-soft);font-weight:600}
 td.wrap,th.wrap{white-space:normal}
 .muted{color:var(--muted);font-size:12px}
