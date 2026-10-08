@@ -136,3 +136,24 @@
 ### Status
 
 [OK] **Completed**
+
+## Session 7: 公开主页(GET / 落地页)
+
+**Date**: 2026-10-08
+**Task**: 10-08-public-homepage
+**Branch**: `main`
+
+### Summary
+
+根路径此前落入 notFound 返回 JSON 404。新增无鉴权公开主页:品牌区 + 三点能力简介 + 三个聚合数字(启用源数 / 在架模型数 / 近 24h added+delisted 变动数)+ 进入后台与 GitHub 入口。免费档纪律:单条 SQL 子查询合并(缓存未命中恰 1 条 D1 语句),Cache API(`caches.default`)60s 整页缓存防刷,缓存键归一化为 `origin + '/'` 堵变参 query 绕过;caches 缺失/读写失败优雅降级直查。信息暴露边界:页面仅三个数字,源名/端点/模型 ID/事件内容/机密不入页(能力简介不点名 OpenRouter/models.dev)。复用 page() + BASE_CSS 亮暗三态,窄屏单列堆叠。trellis-implement/check 双子代理全流程,check 3 个 P2(缓存键归一化、c.html 统一、窄屏堆叠)已修复复验。typecheck 0 错、151 用例全绿。契约增补 admin-and-feed.md「公开主页」节。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| c5ab29d | feat: 公开主页落地 GET /(无鉴权三个聚合数字,单条 D1 语句 + Cache API 60s 防刷) |
+| (本次) | chore: 任务归档(public-homepage)+ journal Session 7 |
+
+### Status
+
+[OK] **Completed**

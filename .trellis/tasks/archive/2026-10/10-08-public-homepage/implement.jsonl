@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "编码规范总入口 + workerd 生产环境 Key Gotchas(写代码前必读)"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "D1 subrequest/读行预算算法——主页单条 SQL 约束的依据与算法"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "分层纪律:SQL 只进 src/db/、ui 渲染纯函数的目录归属"}
+{"file": ".trellis/spec/product/admin-and-feed.md", "reason": "现有后台/feed 路由契约——主页要新增的路由语义写进此文件"}
+{"file": ".trellis/spec/product/storage.md", "reason": "models/events/sources 表契约(missing=0 在架、kind 集合),主页三个聚合数字的语义来源"}

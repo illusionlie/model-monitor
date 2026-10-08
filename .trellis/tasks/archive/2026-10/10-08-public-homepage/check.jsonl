@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "测试清单与边界用例要求(时间/去重类必须有边界用例)"}
+{"file": ".trellis/spec/backend/index.md", "reason": "检查基准:编码规范 + workerd 生产坑(PBKDF2/CPU 类限制本地测不出)"}
+{"file": ".trellis/spec/product/admin-and-feed.md", "reason": "验收对照:主页契约是否已增补、既有路由语义是否零改动"}
+{"file": ".trellis/spec/product/storage.md", "reason": "验收对照:三个聚合数字的表语义是否正确(missing=0、kind 过滤)"}
