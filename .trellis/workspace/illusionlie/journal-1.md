@@ -114,3 +114,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 6: 后台表格垂直居中修复
+
+**Date**: 2026-10-08
+**Task**: 10-08-table-valign-fix
+**Branch**: `main`
+
+### Summary
+
+用户报障:事件标签页条目除模型列外均不垂直居中。定位:css.ts:54 全局 `th,td{…vertical-align:top…}`,事件表「模型」列与渠道源表「最近错误」列是仅有的两处 `td.wrap`(white-space:normal)换行撑高行,其余单行列顶格。修复:全局规则 `top`→`middle` 一处改动同时修两表(每行仅一列 wrap,居中语义无歧义;不换行的行 top/middle 无视觉差)。轻量任务 PRD-only,内联实施。typecheck 0 错、141 用例全绿。spec 未记载该对齐方式,无需同步。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| 5294154 | fix: 后台表格单元格垂直居中(事件/渠道源表 wrap 列撑高行时其余列不再顶格) |
+| (本次) | chore: 任务归档(table-valign-fix)+ journal Session 6 |
+
+### Status
+
+[OK] **Completed**
